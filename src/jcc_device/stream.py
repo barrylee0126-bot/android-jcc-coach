@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import select
@@ -24,12 +25,14 @@ SCRCPY = PROJECT / "tools" / "scrcpy"
 class TabletStream:
     """Own both subprocesses and the FIFO for one read-only capture session."""
 
-    def __init__(self, max_size: int = 1600, device_fps: int = 15, sample_fps: int = 4):
+    def __init__(self, max_size: int = 1600, device_fps: int = 15, sample_fps: int = 4,
+                 *, capture_diagnostics: bool = True):
         if max_size <= 0 or device_fps <= 0 or sample_fps <= 0:
             raise ValueError("Frame sizes and rates must be positive")
         self.max_size = max_size
         self.device_fps = device_fps
         self.sample_fps = sample_fps
+        self.capture_diagnostics = capture_diagnostics
         self._temp = None
         self._scrcpy_log = None
         self._ffmpeg_log = None
@@ -38,26 +41,32 @@ class TabletStream:
         self._buffer = bytearray()
 
     def __enter__(self) -> "TabletStream":
+        if self._capture or self._decode:
+            raise RuntimeError("The stream has already been started")
         ffmpeg = shutil.which("ffmpeg")
         if not ffmpeg:
             raise RuntimeError("ffmpeg is required to decode the tablet stream")
         self._temp = tempfile.TemporaryDirectory(prefix="jcc-stream-")
         fifo = Path(self._temp.name) / "capture.mkv"
         os.mkfifo(fifo, 0o600)
-        self._scrcpy_log = tempfile.TemporaryFile()
-        self._ffmpeg_log = tempfile.TemporaryFile()
+        self._buffer.clear()
+        if self.capture_diagnostics:
+            self._scrcpy_log = tempfile.TemporaryFile()
+            self._ffmpeg_log = tempfile.TemporaryFile()
         try:
             self._decode = subprocess.Popen(
                 [ffmpeg, "-hide_banner", "-loglevel", "error", "-probesize", "32",
                  "-analyzeduration", "0", "-i", str(fifo), "-vf", f"fps={self.sample_fps}",
                  "-an", "-c:v", "mjpeg", "-q:v", "4", "-f", "image2pipe", "pipe:1"],
-                stdout=subprocess.PIPE, stderr=self._ffmpeg_log,
+                stdout=subprocess.PIPE, stderr=self._ffmpeg_log or subprocess.DEVNULL,
+                bufsize=0,
             )
             self._capture = subprocess.Popen(
                 [str(SCRCPY), "--no-control", "--no-window", "--no-power-on",
                  f"--max-size={self.max_size}", f"--max-fps={self.device_fps}",
                  "--record-format=mkv", f"--record={fifo}"],
-                stdout=self._scrcpy_log, stderr=self._scrcpy_log,
+                stdout=self._scrcpy_log or subprocess.DEVNULL,
+                stderr=self._scrcpy_log or subprocess.DEVNULL,
             )
         except Exception:
             self.close()
@@ -77,6 +86,8 @@ class TabletStream:
 
     def read_frame(self, timeout: float = 10.0) -> bytes:
         """Return one JPEG frame, or fail after a bounded wait."""
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be finite and positive")
         if not self._decode or not self._decode.stdout or not self._capture:
             raise RuntimeError("The stream has not been started")
         deadline = time.monotonic() + timeout
@@ -121,6 +132,7 @@ class TabletStream:
             self._temp.cleanup()
         self._capture = self._decode = None
         self._scrcpy_log = self._ffmpeg_log = self._temp = None
+        self._buffer.clear()
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()

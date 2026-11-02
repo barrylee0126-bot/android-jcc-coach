@@ -9,6 +9,18 @@
 !/src/
 !/tools/
 !/docs/
+!/schemas/
+!/tests/
+
+# Publish only the synthetic schemas, examples and contract tests explicitly listed.
+/schemas/*
+!/schemas/game-state-v1.schema.json
+!/schemas/examples/
+/schemas/examples/*
+!/schemas/examples/game-state-v1.example.json
+!/schemas/examples/sample-annotation-v1.example.json
+/tests/*
+!/tests/test_game_state_v1.py
 
 /src/**/__pycache__/
 /src/**/*.pyc

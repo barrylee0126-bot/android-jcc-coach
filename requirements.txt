@@ -1,5 +1,6 @@
 adb-shell[async]==0.4.4
 httpx==0.28.1
+jsonschema==4.26.0
 loguru==0.7.3
 numpy==2.3.5
 paddleocr==3.7.0

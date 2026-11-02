@@ -1,0 +1,2283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:jcc:schemas:game-state-v1",
+  "title": "JCC game-state-v1",
+  "description": "Read-only observation snapshot. Structural validation must be followed by the clock, reference, freshness and update checks in docs/specs/game-state-v1.md.",
+  "$comment": "No image bytes, paths, account names or device identifiers belong in this contract. All refs are local; loading this schema requires no network.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "game-state-v1"
+    },
+    "sample_kind": {
+      "enum": [
+        "synthetic",
+        "live",
+        "replay"
+      ]
+    },
+    "stream_id": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "host_clock_id": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "snapshot_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "context_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frame_id": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "assembled_host_monotonic_ms": {
+      "$ref": "#/$defs/monotonic_ms"
+    },
+    "freshness_policy_id": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/frame"
+      },
+      "minItems": 1
+    },
+    "scene": {
+      "$ref": "#/$defs/scene_field"
+    },
+    "phase": {
+      "$ref": "#/$defs/phase_field"
+    },
+    "mode": {
+      "$ref": "#/$defs/mode_field"
+    },
+    "game_version": {
+      "$ref": "#/$defs/version_field"
+    },
+    "round": {
+      "$ref": "#/$defs/round_field"
+    },
+    "hp": {
+      "$ref": "#/$defs/integer_field"
+    },
+    "gold": {
+      "$ref": "#/$defs/integer_field"
+    },
+    "level": {
+      "$ref": "#/$defs/level_field"
+    },
+    "shop": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/shop_slot"
+            },
+            {
+              "properties": {
+                "slot": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/shop_slot"
+            },
+            {
+              "properties": {
+                "slot": {
+                  "const": 2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/shop_slot"
+            },
+            {
+              "properties": {
+                "slot": {
+                  "const": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/shop_slot"
+            },
+            {
+              "properties": {
+                "slot": {
+                  "const": 4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/shop_slot"
+            },
+            {
+              "properties": {
+                "slot": {
+                  "const": 5
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "affordances": {
+      "type": "object",
+      "properties": {
+        "shop_purchase": {
+          "$ref": "#/$defs/boolean_field"
+        },
+        "shop_refresh": {
+          "$ref": "#/$defs/boolean_field"
+        },
+        "level_purchase": {
+          "$ref": "#/$defs/boolean_field"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
+  },
+  "required": [
+    "schema_version",
+    "sample_kind",
+    "stream_id",
+    "host_clock_id",
+    "snapshot_revision",
+    "context_epoch",
+    "frame_id",
+    "assembled_host_monotonic_ms",
+    "freshness_policy_id",
+    "frames",
+    "scene",
+    "phase",
+    "mode",
+    "game_version",
+    "round",
+    "hp",
+    "gold",
+    "level",
+    "shop"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nonempty": {
+      "type": "string",
+      "minLength": 1
+    },
+    "monotonic_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Milliseconds in the enclosing host_clock_id domain; never wall time."
+    },
+    "box": {
+      "type": "object",
+      "properties": {
+        "x_min": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y_min": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "x_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "x_min",
+        "y_min",
+        "x_max",
+        "y_max"
+      ],
+      "additionalProperties": false,
+      "description": "Normalized decoded-frame coordinates, top-left origin; positive area is checked by the semantic validator."
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "orientation": {
+          "enum": [
+            "landscape",
+            "portrait",
+            "square"
+          ]
+        },
+        "rotation_applied_degrees": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "coordinate_space": {
+          "const": "decoded_frame_normalized_top_left"
+        },
+        "game_viewport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calibration_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonempty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "width_px",
+        "height_px",
+        "orientation",
+        "rotation_applied_degrees",
+        "coordinate_space",
+        "game_viewport",
+        "calibration_id"
+      ],
+      "additionalProperties": false
+    },
+    "device_capture_time": {
+      "type": "object",
+      "properties": {
+        "clock_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "ticks_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "provenance": {
+          "$ref": "#/$defs/nonempty"
+        }
+      },
+      "required": [
+        "clock_id",
+        "ticks_ms",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Optional independently sourced device capture timestamp. No device/host clock mapping is defined in v1."
+    },
+    "frame": {
+      "type": "object",
+      "properties": {
+        "frame_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "host_received_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "device_capture_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/device_capture_time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "image": {
+          "$ref": "#/$defs/image"
+        }
+      },
+      "required": [
+        "frame_id",
+        "sequence",
+        "context_epoch",
+        "host_received_monotonic_ms",
+        "device_capture_time",
+        "image"
+      ],
+      "additionalProperties": false
+    },
+    "method": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "ocr",
+            "template",
+            "vision_model",
+            "manual",
+            "metadata",
+            "fusion",
+            "unavailable"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonempty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "confidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "raw_score"
+            },
+            "value": {
+              "type": "number"
+            },
+            "scale": {
+              "$ref": "#/$defs/nonempty"
+            }
+          },
+          "required": [
+            "kind",
+            "value",
+            "scale"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "model_self_report"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            },
+            "scale": {
+              "$ref": "#/$defs/nonempty"
+            }
+          },
+          "required": [
+            "kind",
+            "value",
+            "scale"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "calibrated_probability"
+            },
+            "value": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "scale": {
+              "const": "probability_0_1"
+            },
+            "calibration_ref": {
+              "$ref": "#/$defs/nonempty"
+            }
+          },
+          "required": [
+            "kind",
+            "value",
+            "scale",
+            "calibration_ref"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "candidate": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "source_frame_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "observed_host_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "completed_host_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "expires_host_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/confidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "source_frame_id",
+        "observed_host_monotonic_ms",
+        "completed_host_monotonic_ms",
+        "expires_host_monotonic_ms",
+        "method",
+        "region"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "properties": {
+            "method": {
+              "not": {
+                "properties": {
+                  "kind": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "recognized",
+            "unknown",
+            "conflict",
+            "stale"
+          ]
+        },
+        "value": {},
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable",
+            "undetermined"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "context",
+            "stream"
+          ]
+        },
+        "source_frame_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "observed_host_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "completed_host_monotonic_ms": {
+          "$ref": "#/$defs/monotonic_ms"
+        },
+        "expires_host_monotonic_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/monotonic_ms"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/confidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonempty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_known_value": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/candidate"
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "status",
+        "value",
+        "applicability",
+        "scope",
+        "source_frame_id",
+        "observed_host_monotonic_ms",
+        "completed_host_monotonic_ms",
+        "expires_host_monotonic_ms",
+        "method",
+        "region",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "description": "An atomic field observation. Unknown results still cite the frame assessed or invalidated, even when recognition was not attempted.",
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "recognized"
+            },
+            "value": {
+              "not": {
+                "type": "null"
+              }
+            },
+            "applicability": {
+              "const": "applicable"
+            },
+            "reason": {
+              "type": "null"
+            },
+            "expires_host_monotonic_ms": {
+              "$ref": "#/$defs/monotonic_ms"
+            },
+            "method": {
+              "not": {
+                "properties": {
+                  "kind": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            },
+            "last_known_value": false,
+            "candidates": false
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "unknown"
+            },
+            "value": {
+              "type": "null"
+            },
+            "reason": {
+              "$ref": "#/$defs/nonempty"
+            },
+            "expires_host_monotonic_ms": {
+              "type": "null"
+            },
+            "last_known_value": false,
+            "candidates": false
+          }
+        },
+        {
+          "required": [
+            "candidates"
+          ],
+          "properties": {
+            "status": {
+              "const": "conflict"
+            },
+            "value": {
+              "type": "null"
+            },
+            "applicability": {
+              "const": "applicable"
+            },
+            "reason": {
+              "$ref": "#/$defs/nonempty"
+            },
+            "expires_host_monotonic_ms": {
+              "type": "null"
+            },
+            "method": {
+              "not": {
+                "properties": {
+                  "kind": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            },
+            "last_known_value": false
+          }
+        },
+        {
+          "required": [
+            "last_known_value"
+          ],
+          "properties": {
+            "status": {
+              "const": "stale"
+            },
+            "value": {
+              "type": "null"
+            },
+            "applicability": {
+              "enum": [
+                "applicable",
+                "undetermined"
+              ]
+            },
+            "reason": {
+              "enum": [
+                "expired",
+                "context_changed",
+                "invalidated",
+                "disconnected"
+              ]
+            },
+            "expires_host_monotonic_ms": {
+              "$ref": "#/$defs/monotonic_ms"
+            },
+            "method": {
+              "not": {
+                "properties": {
+                  "kind": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            },
+            "candidates": false
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "not_applicable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              },
+              "reason": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "not_applicable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "applicability": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "undetermined"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "unknown",
+                  "stale"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scene_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "lobby",
+                    "mode_select",
+                    "battle",
+                    "loading",
+                    "settlement",
+                    "history",
+                    "options_dialog",
+                    "other"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "enum": [
+                "lobby",
+                "mode_select",
+                "battle",
+                "loading",
+                "settlement",
+                "history",
+                "options_dialog",
+                "other"
+              ]
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "enum": [
+                          "lobby",
+                          "mode_select",
+                          "battle",
+                          "loading",
+                          "settlement",
+                          "history",
+                          "options_dialog",
+                          "other"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ]
+    },
+    "phase_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "preparation",
+                    "combat",
+                    "carousel",
+                    "selection",
+                    "transition"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "enum": [
+                "preparation",
+                "combat",
+                "carousel",
+                "selection",
+                "transition"
+              ]
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "enum": [
+                          "preparation",
+                          "combat",
+                          "carousel",
+                          "selection",
+                          "transition"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ]
+    },
+    "round_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "stage": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "step": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "stage",
+                    "step"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "object",
+              "properties": {
+                "stage": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "step": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "stage",
+                "step"
+              ],
+              "additionalProperties": false
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "object",
+                        "properties": {
+                          "stage": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "step": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "stage",
+                          "step"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ],
+      "description": "Displayed stage-step pair, not scene/phase. No version-specific upper bounds are assumed."
+    },
+    "integer_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "integer"
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ],
+      "description": "Displayed integer in HP points or gold units. Mode-specific legal ranges require a verified ruleset."
+    },
+    "level_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ],
+      "description": "Displayed player level, not unit star level."
+    },
+    "boolean_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "boolean"
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ]
+    },
+    "mode_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "enum": [
+                "context",
+                "stream"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Verified mode key; unknown mode is null, never an inferred default."
+    },
+    "version_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "region": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "season": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "patch": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "verification_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "region",
+                    "season",
+                    "patch",
+                    "verification_ref"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "type": "object",
+              "properties": {
+                "region": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "season": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "patch": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "verification_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "region",
+                "season",
+                "patch",
+                "verification_ref"
+              ],
+              "additionalProperties": false
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "object",
+                        "properties": {
+                          "region": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "season": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "patch": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "verification_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "region",
+                          "season",
+                          "patch",
+                          "verification_ref"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "enum": [
+                "context",
+                "stream"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Recognized only when region, season and balance patch are verified for this stream. A third-party dataset alone does not verify the running game."
+    },
+    "catalog_ref": {
+      "type": "object",
+      "properties": {
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entity_kind": {
+          "const": "unit"
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "dataset_id",
+        "entity_kind",
+        "entity_id",
+        "variant"
+      ],
+      "additionalProperties": false,
+      "description": "Scoped data reference; a bare entity_id is not a global identity or proof of current-version applicability."
+    },
+    "shop_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "empty"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "unit"
+            },
+            "display_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "catalog_ref": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/catalog_ref"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "display_name",
+            "catalog_ref"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "shop_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/shop_value"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_known_value": {
+              "$ref": "#/$defs/shop_value"
+            },
+            "candidates": {
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/candidate"
+                  },
+                  {
+                    "properties": {
+                      "value": {
+                        "$ref": "#/$defs/shop_value"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "const": "context"
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "recognized",
+                  "conflict",
+                  "stale"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "region": {
+                "$ref": "#/$defs/box"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "extension_field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "properties": {
+            "scope": {
+              "const": "context"
+            }
+          }
+        }
+      ]
+    },
+    "extensions": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z][a-z0-9_.-]*:[a-z][a-z0-9_.-]*$": {
+          "$ref": "#/$defs/extension_field"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Namespaced atomic observations, e.g. jcc:price. Consumers must explicitly opt into each extension."
+    },
+    "shop_slot": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "content": {
+          "$ref": "#/$defs/shop_field"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "slot",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "scene_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "lobby",
+                    "mode_select",
+                    "battle",
+                    "loading",
+                    "settlement",
+                    "history",
+                    "options_dialog",
+                    "other"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "phase_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "preparation",
+                    "combat",
+                    "carousel",
+                    "selection",
+                    "transition"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "mode_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "game_version_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "region": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "season": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "patch": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "verification_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "region",
+                    "season",
+                    "patch",
+                    "verification_ref"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "round_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "stage": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "step": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "stage",
+                    "step"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "hp_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "gold_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "level_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "shop_content_label": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sample_label"
+        },
+        {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/shop_value"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "truth_status": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "region": {
+                "$ref": "#/$defs/box"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "shop_slot_label": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "content": {
+          "$ref": "#/$defs/shop_content_label"
+        }
+      },
+      "required": [
+        "slot",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "sample_asset": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "access": {
+          "const": "local_only"
+        },
+        "redaction": {
+          "enum": [
+            "none",
+            "redacted"
+          ]
+        }
+      },
+      "required": [
+        "asset_ref",
+        "sha256",
+        "access",
+        "redaction"
+      ],
+      "additionalProperties": false,
+      "description": "Local-only opaque asset reference; hashes identify the exact annotated image bytes, never an earlier unredacted image."
+    },
+    "sample_annotation": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "sample-annotation-v1"
+        },
+        "sample_kind": {
+          "enum": [
+            "synthetic",
+            "real"
+          ]
+        },
+        "sample_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "dataset_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "recording_session_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "stream_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "host_clock_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "split": {
+          "enum": [
+            "development",
+            "acceptance",
+            "quarantine"
+          ]
+        },
+        "dedupe_group_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "state_group_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sample_asset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "annotation_method": {
+          "enum": [
+            "human",
+            "synthetic"
+          ]
+        },
+        "annotator_id": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "reviewer_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonempty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_status": {
+          "enum": [
+            "draft",
+            "independently_reviewed",
+            "adjudicated"
+          ]
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty"
+          },
+          "uniqueItems": true
+        },
+        "labels": {
+          "type": "object",
+          "properties": {
+            "scene": {
+              "$ref": "#/$defs/scene_label"
+            },
+            "phase": {
+              "$ref": "#/$defs/phase_label"
+            },
+            "mode": {
+              "$ref": "#/$defs/mode_label"
+            },
+            "game_version": {
+              "$ref": "#/$defs/game_version_label"
+            },
+            "round": {
+              "$ref": "#/$defs/round_label"
+            },
+            "hp": {
+              "$ref": "#/$defs/hp_label"
+            },
+            "gold": {
+              "$ref": "#/$defs/gold_label"
+            },
+            "level": {
+              "$ref": "#/$defs/level_label"
+            },
+            "shop": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "prefixItems": [
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/shop_slot_label"
+                    },
+                    {
+                      "properties": {
+                        "slot": {
+                          "const": 1
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/shop_slot_label"
+                    },
+                    {
+                      "properties": {
+                        "slot": {
+                          "const": 2
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/shop_slot_label"
+                    },
+                    {
+                      "properties": {
+                        "slot": {
+                          "const": 3
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/shop_slot_label"
+                    },
+                    {
+                      "properties": {
+                        "slot": {
+                          "const": 4
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/shop_slot_label"
+                    },
+                    {
+                      "properties": {
+                        "slot": {
+                          "const": 5
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "items": false
+            }
+          },
+          "required": [
+            "scene",
+            "phase",
+            "mode",
+            "game_version",
+            "round",
+            "hp",
+            "gold",
+            "level",
+            "shop"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "sample_kind",
+        "sample_id",
+        "dataset_id",
+        "recording_session_id",
+        "stream_id",
+        "host_clock_id",
+        "split",
+        "dedupe_group_id",
+        "state_group_id",
+        "asset",
+        "frame",
+        "annotation_method",
+        "annotator_id",
+        "reviewer_id",
+        "review_status",
+        "conditions",
+        "labels"
+      ],
+      "additionalProperties": false,
+      "description": "Machine-checkable local sample manifest record, selected via #/$defs/sample_annotation; it is not a game-state snapshot.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sample_kind": {
+                "const": "synthetic"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "split": {
+                "const": "quarantine"
+              },
+              "annotation_method": {
+                "const": "synthetic"
+              },
+              "asset": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "sample_kind": {
+                "const": "real"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "asset": {
+                "$ref": "#/$defs/sample_asset"
+              },
+              "annotation_method": {
+                "const": "human"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "split": {
+                "const": "acceptance"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sample_kind": {
+                "const": "real"
+              },
+              "review_status": {
+                "enum": [
+                  "independently_reviewed",
+                  "adjudicated"
+                ]
+              },
+              "reviewer_id": {
+                "$ref": "#/$defs/nonempty"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sample_label": {
+      "type": "object",
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable",
+            "undetermined"
+          ]
+        },
+        "truth_status": {
+          "enum": [
+            "known",
+            "unknown"
+          ]
+        },
+        "value": {},
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonempty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "applicability",
+        "truth_status",
+        "value",
+        "reason",
+        "region"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "applicability": {
+              "const": "applicable"
+            },
+            "truth_status": {
+              "const": "known"
+            },
+            "value": {
+              "not": {
+                "type": "null"
+              }
+            },
+            "reason": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "applicability": {
+              "const": "applicable"
+            },
+            "truth_status": {
+              "const": "unknown"
+            },
+            "value": {
+              "type": "null"
+            },
+            "reason": {
+              "$ref": "#/$defs/nonempty"
+            }
+          }
+        },
+        {
+          "properties": {
+            "applicability": {
+              "const": "not_applicable"
+            },
+            "truth_status": {
+              "const": "unknown"
+            },
+            "value": {
+              "type": "null"
+            },
+            "reason": {
+              "const": "not_applicable"
+            }
+          }
+        },
+        {
+          "properties": {
+            "applicability": {
+              "const": "undetermined"
+            },
+            "truth_status": {
+              "const": "unknown"
+            },
+            "value": {
+              "type": "null"
+            },
+            "reason": {
+              "$ref": "#/$defs/nonempty"
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "not_applicable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "applicability": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

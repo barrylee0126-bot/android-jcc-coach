@@ -1,0 +1,427 @@
+{
+  "schema_version": "game-state-v1",
+  "sample_kind": "synthetic",
+  "stream_id": "synthetic-stream-1",
+  "host_clock_id": "synthetic-host-clock-1",
+  "snapshot_revision": 2,
+  "context_epoch": 0,
+  "frame_id": "synthetic-frame-1",
+  "assembled_host_monotonic_ms": 1120,
+  "freshness_policy_id": "synthetic-only-not-calibrated",
+  "frames": [
+    {
+      "frame_id": "synthetic-frame-0",
+      "sequence": 0,
+      "context_epoch": 0,
+      "host_received_monotonic_ms": 900,
+      "device_capture_time": null,
+      "image": {
+        "width_px": 1280,
+        "height_px": 800,
+        "orientation": "landscape",
+        "rotation_applied_degrees": 0,
+        "coordinate_space": "decoded_frame_normalized_top_left",
+        "game_viewport": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 1,
+          "y_max": 1
+        },
+        "calibration_id": "synthetic-layout-v1"
+      }
+    },
+    {
+      "frame_id": "synthetic-frame-1",
+      "sequence": 1,
+      "context_epoch": 0,
+      "host_received_monotonic_ms": 1000,
+      "device_capture_time": null,
+      "image": {
+        "width_px": 1280,
+        "height_px": 800,
+        "orientation": "landscape",
+        "rotation_applied_degrees": 0,
+        "coordinate_space": "decoded_frame_normalized_top_left",
+        "game_viewport": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 1,
+          "y_max": 1
+        },
+        "calibration_id": "synthetic-layout-v1"
+      }
+    }
+  ],
+  "scene": {
+    "status": "recognized",
+    "value": "battle",
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": 2000,
+    "method": {
+      "kind": "manual",
+      "name": "synthetic-manual",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": null
+  },
+  "phase": {
+    "status": "recognized",
+    "value": "preparation",
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": 2000,
+    "method": {
+      "kind": "manual",
+      "name": "synthetic-manual",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": null
+  },
+  "mode": {
+    "status": "unknown",
+    "value": null,
+    "applicability": "applicable",
+    "scope": "stream",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": null,
+    "method": {
+      "kind": "unavailable",
+      "name": "synthetic-unavailable",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": "not_attempted"
+  },
+  "game_version": {
+    "status": "unknown",
+    "value": null,
+    "applicability": "applicable",
+    "scope": "stream",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": null,
+    "method": {
+      "kind": "unavailable",
+      "name": "synthetic-unavailable",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": "version_unverified"
+  },
+  "round": {
+    "status": "recognized",
+    "value": {
+      "stage": 3,
+      "step": 2
+    },
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": 2000,
+    "method": {
+      "kind": "manual",
+      "name": "synthetic-manual",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": null
+  },
+  "hp": {
+    "status": "recognized",
+    "value": 72,
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": 2000,
+    "method": {
+      "kind": "manual",
+      "name": "synthetic-manual",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": null
+  },
+  "gold": {
+    "status": "conflict",
+    "value": null,
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-1",
+    "observed_host_monotonic_ms": 1000,
+    "completed_host_monotonic_ms": 1080,
+    "expires_host_monotonic_ms": null,
+    "method": {
+      "kind": "fusion",
+      "name": "synthetic-fusion",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": "methods_disagree",
+    "candidates": [
+      {
+        "value": 40,
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1070,
+        "expires_host_monotonic_ms": 2000,
+        "method": {
+          "kind": "ocr",
+          "name": "synthetic-ocr",
+          "version": "example-v1"
+        },
+        "region": null
+      },
+      {
+        "value": 41,
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1070,
+        "expires_host_monotonic_ms": 2000,
+        "method": {
+          "kind": "vision_model",
+          "name": "synthetic-vision_model",
+          "version": "example-v1"
+        },
+        "region": null
+      }
+    ]
+  },
+  "level": {
+    "status": "stale",
+    "value": null,
+    "applicability": "applicable",
+    "scope": "context",
+    "source_frame_id": "synthetic-frame-0",
+    "observed_host_monotonic_ms": 900,
+    "completed_host_monotonic_ms": 940,
+    "expires_host_monotonic_ms": 1000,
+    "method": {
+      "kind": "ocr",
+      "name": "synthetic-ocr",
+      "version": "example-v1"
+    },
+    "region": null,
+    "reason": "expired",
+    "last_known_value": 6
+  },
+  "shop": [
+    {
+      "slot": 1,
+      "content": {
+        "status": "unknown",
+        "value": null,
+        "applicability": "applicable",
+        "scope": "context",
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1080,
+        "expires_host_monotonic_ms": null,
+        "method": {
+          "kind": "unavailable",
+          "name": "synthetic-unavailable",
+          "version": "example-v1"
+        },
+        "region": {
+          "x_min": 0.02,
+          "y_min": 0.72,
+          "x_max": 0.2,
+          "y_max": 0.96
+        },
+        "reason": "occluded"
+      },
+      "extensions": {}
+    },
+    {
+      "slot": 2,
+      "content": {
+        "status": "recognized",
+        "value": {
+          "kind": "unit",
+          "display_name": "合成棋子A",
+          "catalog_ref": null
+        },
+        "applicability": "applicable",
+        "scope": "context",
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1080,
+        "expires_host_monotonic_ms": 2000,
+        "method": {
+          "kind": "manual",
+          "name": "synthetic-manual",
+          "version": "example-v1"
+        },
+        "region": {
+          "x_min": 0.215,
+          "y_min": 0.72,
+          "x_max": 0.395,
+          "y_max": 0.96
+        },
+        "reason": null
+      },
+      "extensions": {}
+    },
+    {
+      "slot": 3,
+      "content": {
+        "status": "recognized",
+        "value": {
+          "kind": "empty"
+        },
+        "applicability": "applicable",
+        "scope": "context",
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1080,
+        "expires_host_monotonic_ms": 2000,
+        "method": {
+          "kind": "manual",
+          "name": "synthetic-manual",
+          "version": "example-v1"
+        },
+        "region": {
+          "x_min": 0.41,
+          "y_min": 0.72,
+          "x_max": 0.59,
+          "y_max": 0.96
+        },
+        "reason": null
+      },
+      "extensions": {}
+    },
+    {
+      "slot": 4,
+      "content": {
+        "status": "conflict",
+        "value": null,
+        "applicability": "applicable",
+        "scope": "context",
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1080,
+        "expires_host_monotonic_ms": null,
+        "method": {
+          "kind": "fusion",
+          "name": "synthetic-fusion",
+          "version": "example-v1"
+        },
+        "region": {
+          "x_min": 0.605,
+          "y_min": 0.72,
+          "x_max": 0.785,
+          "y_max": 0.96
+        },
+        "reason": "methods_disagree",
+        "candidates": [
+          {
+            "value": {
+              "kind": "unit",
+              "display_name": "合成棋子B",
+              "catalog_ref": null
+            },
+            "source_frame_id": "synthetic-frame-1",
+            "observed_host_monotonic_ms": 1000,
+            "completed_host_monotonic_ms": 1070,
+            "expires_host_monotonic_ms": 2000,
+            "method": {
+              "kind": "ocr",
+              "name": "synthetic-ocr",
+              "version": "example-v1"
+            },
+            "region": {
+              "x_min": 0.605,
+              "y_min": 0.72,
+              "x_max": 0.785,
+              "y_max": 0.96
+            }
+          },
+          {
+            "value": {
+              "kind": "unit",
+              "display_name": "合成棋子C",
+              "catalog_ref": null
+            },
+            "source_frame_id": "synthetic-frame-1",
+            "observed_host_monotonic_ms": 1000,
+            "completed_host_monotonic_ms": 1070,
+            "expires_host_monotonic_ms": 2000,
+            "method": {
+              "kind": "vision_model",
+              "name": "synthetic-vision_model",
+              "version": "example-v1"
+            },
+            "region": {
+              "x_min": 0.605,
+              "y_min": 0.72,
+              "x_max": 0.785,
+              "y_max": 0.96
+            }
+          }
+        ]
+      },
+      "extensions": {}
+    },
+    {
+      "slot": 5,
+      "content": {
+        "status": "unknown",
+        "value": null,
+        "applicability": "applicable",
+        "scope": "context",
+        "source_frame_id": "synthetic-frame-1",
+        "observed_host_monotonic_ms": 1000,
+        "completed_host_monotonic_ms": 1080,
+        "expires_host_monotonic_ms": null,
+        "method": {
+          "kind": "unavailable",
+          "name": "synthetic-unavailable",
+          "version": "example-v1"
+        },
+        "region": {
+          "x_min": 0.8,
+          "y_min": 0.72,
+          "x_max": 0.98,
+          "y_max": 0.96
+        },
+        "reason": "not_attempted"
+      },
+      "extensions": {}
+    }
+  ],
+  "affordances": {
+    "shop_purchase": {
+      "status": "unknown",
+      "value": null,
+      "applicability": "applicable",
+      "scope": "context",
+      "source_frame_id": "synthetic-frame-1",
+      "observed_host_monotonic_ms": 1000,
+      "completed_host_monotonic_ms": 1080,
+      "expires_host_monotonic_ms": null,
+      "method": {
+        "kind": "unavailable",
+        "name": "synthetic-unavailable",
+        "version": "example-v1"
+      },
+      "region": null,
+      "reason": "unreadable"
+    }
+  },
+  "extensions": {}
+}

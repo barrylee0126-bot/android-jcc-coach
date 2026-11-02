@@ -1,0 +1,151 @@
+{
+  "schema_version": "sample-annotation-v1",
+  "sample_kind": "synthetic",
+  "sample_id": "synthetic-sample-1",
+  "dataset_id": "synthetic-contract-fixtures",
+  "recording_session_id": "synthetic-recording-session-1",
+  "stream_id": "synthetic-stream-1",
+  "host_clock_id": "synthetic-host-clock-1",
+  "split": "quarantine",
+  "dedupe_group_id": "synthetic-dedupe-1",
+  "state_group_id": "synthetic-state-1",
+  "asset": null,
+  "frame": {
+    "frame_id": "synthetic-frame-1",
+    "sequence": 1,
+    "context_epoch": 0,
+    "host_received_monotonic_ms": 1000,
+    "device_capture_time": null,
+    "image": {
+      "width_px": 1280,
+      "height_px": 800,
+      "orientation": "landscape",
+      "rotation_applied_degrees": 0,
+      "coordinate_space": "decoded_frame_normalized_top_left",
+      "game_viewport": {
+        "x_min": 0,
+        "y_min": 0,
+        "x_max": 1,
+        "y_max": 1
+      },
+      "calibration_id": "synthetic-layout-v1"
+    }
+  },
+  "annotation_method": "synthetic",
+  "annotator_id": "synthetic-annotator",
+  "reviewer_id": null,
+  "review_status": "draft",
+  "conditions": [
+    "synthetic_no_real_image"
+  ],
+  "labels": {
+    "scene": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "phase": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "mode": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "game_version": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "round": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "hp": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "gold": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "level": {
+      "applicability": "undetermined",
+      "truth_status": "unknown",
+      "value": null,
+      "reason": "synthetic_placeholder_no_real_image",
+      "region": null
+    },
+    "shop": [
+      {
+        "slot": 1,
+        "content": {
+          "applicability": "undetermined",
+          "truth_status": "unknown",
+          "value": null,
+          "reason": "synthetic_placeholder_no_real_image",
+          "region": null
+        }
+      },
+      {
+        "slot": 2,
+        "content": {
+          "applicability": "undetermined",
+          "truth_status": "unknown",
+          "value": null,
+          "reason": "synthetic_placeholder_no_real_image",
+          "region": null
+        }
+      },
+      {
+        "slot": 3,
+        "content": {
+          "applicability": "undetermined",
+          "truth_status": "unknown",
+          "value": null,
+          "reason": "synthetic_placeholder_no_real_image",
+          "region": null
+        }
+      },
+      {
+        "slot": 4,
+        "content": {
+          "applicability": "undetermined",
+          "truth_status": "unknown",
+          "value": null,
+          "reason": "synthetic_placeholder_no_real_image",
+          "region": null
+        }
+      },
+      {
+        "slot": 5,
+        "content": {
+          "applicability": "undetermined",
+          "truth_status": "unknown",
+          "value": null,
+          "reason": "synthetic_placeholder_no_real_image",
+          "region": null
+        }
+      }
+    ]
+  }
+}
