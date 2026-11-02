@@ -7,3 +7,5 @@
 新帧候选为 `unknown` 时，旧帧的候选、假设和余额都会撤回。调用方还必须明确 `basis=no_fresh_candidate_supplied`，表示本帧没有交给模块新的可消费候选；它不能被写成 OCR 失败、真实数值或断流已被检测的证据。撤回原因只接受无可靠候选、候选过期、场景切换、来源断流、帧绑定缺失或候选冲突；输出不允许把数字带入未知帧；最后一帧必须为撤回状态，确保演示实际包含失效处理。输出目录只能新建在项目外的私有目录中，HTML 内嵌图片和少量本地交互脚本，CSP 禁止网络与外部资源；报告只留在本机。
 
 报告的 `human_ground_truth_count=0`、`independent_review_count=0`、`accuracy=null`、`advice_eligible=false`、`strategy_recommendation=false`、`automatic_action=null` 是固定边界。页面逐帧由用户手动点击查看，不是自动连续视频播放，也不表示实时撤回。它用于检查“同帧机器候选 → 条件算术 → 新帧未知撤回”的行为，不是实时延迟、识别准确率、实战策略、自动操作或上分证据。
+
+浏览器回归测试只使用临时目录里的合成 1×1 PNG 和合成清单，不读取私有录像或页面。运行 `node src/jcc_replay_coach/tests/test_web_visibility.mjs`；默认使用项目 `.venv/bin/python` 及常见 Chrome/Chromium 路径，也可用 `JCC_REPLAY_COACH_PYTHON`、`JCC_REPLAY_COACH_CHROME_BIN` 指定。测试由现有渲染器生成页面，在真实无头浏览器按计算样式和布局矩形判断可见性，不依赖 `hidden` 属性；它同时注入旧的 `article[hidden]{display:grid!important}` 作为负对照，确保该缺陷会被捕获。浏览器或项目 Python 不可用时，测试输出结构化 `skipped` 原因并以退出码 77 结束。
