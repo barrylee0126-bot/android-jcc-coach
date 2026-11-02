@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+JCC_UI_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$JCC_UI_ROOT"
+export PYTHONDONTWRITEBYTECODE=1
+exec "$JCC_UI_ROOT/.venv/bin/python" -m src.jcc_annotation_ui "$@"

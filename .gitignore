@@ -33,6 +33,7 @@
 !/tools/jcc-scene
 !/tools/jcc-decision-demo
 !/tools/jcc-overlay-demo
+!/tools/jcc-annotation-ui
 !/tools/setup-macos
 
 # Local configuration, third-party checkouts, models, captures and environments

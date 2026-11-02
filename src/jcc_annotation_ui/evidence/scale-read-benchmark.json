@@ -1,0 +1,158 @@
+{
+  "date_local": "2026-11-02",
+  "software_only": true,
+  "real_candidate_images_or_manifests_read": false,
+  "fixture": {
+    "images": 100,
+    "width_px": 3200,
+    "height_px": 2000,
+    "total_encoded_bytes": 395752406,
+    "min_image_bytes": 3956117,
+    "max_image_bytes": 3958686
+  },
+  "python": "3.11.16",
+  "pillow": "13.0.0",
+  "timing_note": "Same generated workspace and process. OS file cache was not purged; no decoded proof persisted across instances. Baseline is original full SampleStore._load path; initialization/list/detail each performed that scan in the previous UI.",
+  "legacy_full_decode_path": {
+    "initialization": {
+      "seconds": [
+        7.345455
+      ],
+      "median_seconds": 7.345455
+    },
+    "list": {
+      "seconds": [
+        7.361914
+      ],
+      "median_seconds": 7.361914
+    },
+    "sample_detail": {
+      "seconds": [
+        7.38447
+      ],
+      "median_seconds": 7.38447
+    },
+    "image": {
+      "seconds": [
+        7.432981
+      ],
+      "median_seconds": 7.432981
+    }
+  },
+  "optimized": {
+    "initialization": {
+      "seconds": [
+        0.465715
+      ],
+      "median_seconds": 0.465715
+    },
+    "list_before_any_decode": {
+      "seconds": [
+        0.458578,
+        0.461393,
+        0.459508
+      ],
+      "median_seconds": 0.459508,
+      "verification": {
+        "scope": "inventory_bytes",
+        "assets": 100,
+        "byte_checked_assets": 100,
+        "decoded_assets": 0,
+        "fresh_decodes": 0,
+        "reused_decodes": 0,
+        "bytes_hashed": 395752406
+      }
+    },
+    "first_sample_detail": {
+      "seconds": [
+        0.53899
+      ],
+      "median_seconds": 0.53899,
+      "verification": {
+        "scope": "selected_content",
+        "assets": 100,
+        "byte_checked_assets": 100,
+        "decoded_assets": 1,
+        "fresh_decodes": 1,
+        "reused_decodes": 0,
+        "bytes_hashed": 395752406
+      }
+    },
+    "image_after_detail": {
+      "seconds": [
+        0.466231
+      ],
+      "median_seconds": 0.466231
+    },
+    "full_preflight_first": {
+      "seconds": [
+        7.465071
+      ],
+      "median_seconds": 7.465071,
+      "verification": {
+        "scope": "full_content",
+        "assets": 100,
+        "byte_checked_assets": 100,
+        "decoded_assets": 100,
+        "fresh_decodes": 99,
+        "reused_decodes": 1,
+        "bytes_hashed": 395752406
+      }
+    },
+    "list_after_preflight": {
+      "seconds": [
+        0.479785,
+        0.464127,
+        0.499996
+      ],
+      "median_seconds": 0.479785
+    },
+    "sample_detail_after_preflight": {
+      "seconds": [
+        0.462037,
+        0.465211,
+        0.462678
+      ],
+      "median_seconds": 0.462678
+    },
+    "image_after_preflight": {
+      "seconds": [
+        0.458606,
+        0.460219,
+        0.469219
+      ],
+      "median_seconds": 0.460219
+    },
+    "full_preflight_warm": {
+      "seconds": [
+        0.453875,
+        0.460175,
+        0.45785
+      ],
+      "median_seconds": 0.45785
+    },
+    "save_without_preflight_cold_instance": {
+      "seconds": [
+        8.468856
+      ],
+      "median_seconds": 8.468856
+    },
+    "save_after_preflight": {
+      "seconds": [
+        1.461381
+      ],
+      "median_seconds": 1.461381
+    },
+    "review_after_preflight": {
+      "seconds": [
+        1.204806
+      ],
+      "median_seconds": 1.204806
+    }
+  },
+  "final_synthetic_samples": 100,
+  "real_samples": 0,
+  "write_note": "All writes are explicit software flow checks on generated fixtures, with all labels unknown. The cold-instance save includes full decoding of 99 not-yet-viewed assets.",
+  "cleanup": "Temporary generated workspace and in-memory proofs are removed at process exit.",
+  "synthetic_workspace_removed": true
+}

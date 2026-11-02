@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>私有样本工作台 · 金铲铲</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div><p class="eyebrow">金铲铲教练 / 本机工具</p><h1>私有样本工作台</h1></div>
+    <button id="shutdown" class="quiet" type="button">关闭服务</button>
+  </header>
+  <p id="mode-banner" class="banner">正在检查专用会话…</p>
+  <p id="message" role="status" aria-live="polite">只在点击保存或提交复核后写入。未填字段保持未知。</p>
+  <div class="layout">
+    <aside class="queue" aria-label="样本列表">
+      <div class="queue-title"><h2>样本</h2><span id="sample-count">—</span></div>
+      <label>查找代号或场次<input id="filter" type="search" placeholder="只在本机筛选" autocomplete="off"></label>
+      <div id="sample-list"></div>
+      <p class="small">本界面不导入图片、不识别、不移动分集。验收集的标签只读。</p>
+    </aside>
+    <main>
+      <div class="work-heading"><div><h2 id="sample-title">选择一张样本</h2><p id="sample-meta" class="small"></p></div>
+        <button id="reload" class="quiet" type="button">丢弃草稿并重载</button>
+      </div>
+      <div class="verification-row"><p id="verification-status" class="small" role="status">图片逐张核验，保存与复核前检查整个工作区。</p><button id="verify" class="quiet" type="button" disabled>完整核验图片（首次较慢）</button></div>
+      <div class="workspace-grid">
+        <section class="image-panel" aria-label="画面与证据区域">
+          <div class="panel-heading"><h3>当前画面</h3><span id="dirty-status" class="badge">未载入</span></div>
+          <p class="small">选择字段后拖动画框；青色是字段证据，红色是遮挡。坐标相对整幅解码图像。</p>
+          <canvas id="image" width="1000" height="600" aria-label="样本画面；可用下方坐标输入替代拖动"></canvas>
+          <details id="zoom-panel"><summary>当前字段放大（只查看原始像素）</summary><canvas id="crop" width="600" height="160" hidden aria-label="当前字段证据区域放大"></canvas><p id="crop-caption" class="small">选择字段并设置区域后可放大查看，不会推断或补全答案。</p></details>
+          <div class="draw-tools"><button id="occlusion-tool" type="button">绘制遮挡</button>
+            <button id="full-region" class="quiet" type="button">当前字段使用整幅图像</button></div>
+          <p id="region-target" class="small">先在右侧选择字段的“选区”</p>
+          <div class="coordinates">
+            <label>左 x<input id="x_min" type="number" min="0" max="1" step="0.001"></label>
+            <label>上 y<input id="y_min" type="number" min="0" max="1" step="0.001"></label>
+            <label>右 x<input id="x_max" type="number" min="0" max="1" step="0.001"></label>
+            <label>下 y<input id="y_max" type="number" min="0" max="1" step="0.001"></label>
+          </div>
+          <button id="apply-region" class="quiet" type="button">应用输入的区域</button>
+          <div id="occlusion-list" class="occlusion-list"></div>
+          <label class="conditions">画面条件（每行一项）<textarea id="conditions" rows="3" placeholder="如 normal、animation、popup"></textarea></label>
+          <details><summary>来源、校验和与复核依据</summary><pre id="provenance"></pre></details>
+        </section>
+        <section class="annotation-panel" aria-label="M1 标签编辑">
+          <div class="panel-heading"><h3>M1 标签</h3><span class="small">6 个字段</span></div>
+          <p class="small">“适用但未知”用于遮挡或不可读；“不适用”须有画面依据。数值不会默认成 0。</p>
+          <div id="fields"></div>
+          <p id="region-errors" class="validation" role="status"></p>
+          <div class="save-box"><label>本次标注者代号<input id="annotator" autocomplete="off" spellcheck="false" placeholder="本人填写非个人信息代号"></label>
+            <button id="save" class="primary" type="button" disabled>保存标注 · 旧复核会失效</button>
+          </div>
+        </section>
+      </div>
+      <section class="review-panel" aria-label="独立复核">
+        <div class="panel-heading"><h3 id="review-title">复核当前已保存标签</h3><span id="review-state" class="badge">—</span></div>
+        <p id="review-instruction" class="small">请先载入当前图像。复核只记录当前保存版本，不会修改答案。</p>
+        <div class="review-inputs">
+          <label>本次复核者代号<input id="reviewer" autocomplete="off" spellcheck="false" placeholder="实际复核者本人填写"></label>
+          <label>私有复核依据代号<input id="evidence" autocomplete="off" spellcheck="false" placeholder="本人填写，可追溯到私有依据"></label>
+          <label>处理方式<select id="review-status"><option value="independently_reviewed">独立复核</option><option value="adjudicated">分歧已裁定（未解决字段仍未知）</option></select></label>
+        </div>
+        <label class="check"><input id="review-confirm" type="checkbox"><span id="confirmation-text">须由实际使用者确认复核边界。</span></label>
+        <button id="review" class="primary" type="button" disabled>提交当前版本复核</button>
+      </section>
+      <details class="readonly"><summary>模式、版本和五格商店（本版只读，保留原值）</summary><pre id="readonly-labels"></pre></details>
+      <footer>原图和标签仅来自明确指定的私有工作区。此工具不认证来源、人员独立、去重或正确率。关闭服务后不可继续保存；关闭页面后最长约 90 秒自动退出。</footer>
+    </main>
+  </div>
+</body>
+</html>

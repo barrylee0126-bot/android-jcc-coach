@@ -1,0 +1,21 @@
+{
+  "date_local": "2026-11-02",
+  "software_only": true,
+  "fixture_images": 100,
+  "fixture_width_px": 3200,
+  "fixture_height_px": 2000,
+  "initial_navigation_to_ready_ms": 1764,
+  "switch_sample_to_ready_ms": 2268,
+  "first_full_preflight_button_to_ready_ms": 8197,
+  "save_after_preflight_button_to_ready_ms": 3631,
+  "agent_action_overhead_included": true,
+  "preflight_workspace_unchanged": true,
+  "draft_preserved_during_preflight": true,
+  "review_disabled_during_preflight": true,
+  "save_disabled_during_preflight": true,
+  "review_disabled_for_unsaved_draft": true,
+  "horizontal_overflow": false,
+  "verification_status": "本次字节已核对 100/100；图片内容已核验 100/100。保存前仍会重新检查；未查看图片可先完整核验。",
+  "close_button_stopped_service_and_port_closed": true,
+  "browser_task_space_finished": true
+}
