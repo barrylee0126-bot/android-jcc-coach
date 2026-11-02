@@ -7,6 +7,7 @@ this Python worker obtained a complete JPEG, not that the tablet captured it.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import math
@@ -72,6 +73,24 @@ class Frame:
         return (time.monotonic_ns() - self.source.host_received_monotonic_ns) / 1e9
 
 
+class FrameObserver(Protocol):
+    """One state owner, bound before start; callbacks must not read this stream.
+
+    receive_lock is a reentrant lock also held by that owner's publication and
+    read paths. FrameRef allocation, synchronous checking and mailbox insertion
+    share this guard, so a result cannot publish during an unchecked receipt.
+    The source read happens outside it; lower-level buffered bytes are not an
+    authoritative application frame until this guarded allocation.
+    """
+
+    stream_id: str
+    receive_lock: object
+
+    def observe_frame(self, frame: Frame) -> object: ...
+
+    def disconnect(self) -> None: ...
+
+
 def positive_seconds(value: float, name: str, *, allow_zero: bool = False) -> float:
     value = float(value)
     if not math.isfinite(value) or value < 0 or (not allow_zero and value == 0):
@@ -103,10 +122,44 @@ class LatestFrameStream:
         self._source_closed = False
         self._error_type: str | None = None
         self._close_error_type: str | None = None
+        self._observer: FrameObserver | None = None
+        self._observer_disconnect_error_type: str | None = None
         self._counts = dict(frames_received=0, frames_delivered=0, frames_replaced=0,
                             frames_discarded=0, frames_expired=0,
                             source_timeouts=0, consumer_timeouts=0,
                             source_errors=0, close_errors=0, max_pending_frames=0)
+
+    def bind_observer(self, observer: FrameObserver) -> None:
+        """Attach exactly one receive-path owner before capture starts.
+
+        The optional hook does not change the byte-only/latest-frame APIs.
+        Every real sequence is checked, including frames later replaced in the
+        mailbox. Hook errors are terminal, sanitized source failures.
+        """
+        with self._condition:
+            if self._observer is not None or self._thread is not None or self._closed:
+                raise FrameStreamError("Bind one observer before starting capture")
+            if observer.stream_id != self.stream_id:
+                raise ValueError("Observer must own this stream")
+            self._observer = observer
+
+    def _receive_guard(self):
+        return nullcontext() if self._observer is None else self._observer.receive_lock
+
+    def _disconnect_observer(self) -> None:
+        if self._observer is not None:
+            try:
+                self._observer.disconnect()
+            except Exception as exc:
+                # Cleanup must still close the source when the owner's clock
+                # or contract fails. Never expose the callback exception text.
+                with self._condition:
+                    if self._observer_disconnect_error_type is None:
+                        self._counts["source_errors"] += 1
+                    self._observer_disconnect_error_type = type(exc).__name__
+                    self._error_type = type(exc).__name__
+                    self._discard_pending()
+                    self._condition.notify_all()
 
     def start(self) -> LatestFrameStream:
         with self._condition:
@@ -157,6 +210,7 @@ class LatestFrameStream:
                             self._counts["source_timeouts"] += 1
                     continue
                 except Exception as exc:
+                    self._disconnect_observer()
                     with self._condition:
                         if not self._stop.is_set():
                             self._counts["source_errors"] += 1
@@ -166,19 +220,41 @@ class LatestFrameStream:
                             self._condition.notify_all()
                     break
                 received_utc = datetime.now(timezone.utc).isoformat()
-                with self._condition:
-                    self._counts["frames_received"] += 1
-                    frame = Frame(FrameRef(self.stream_id, self._counts["frames_received"],
-                                           received_ns, received_utc), jpeg)
-                    if self._stop.is_set():
-                        self._counts["frames_discarded"] += 1
+                with self._receive_guard():
+                    with self._condition:
+                        self._counts["frames_received"] += 1
+                        frame = Frame(FrameRef(self.stream_id, self._counts["frames_received"],
+                                               received_ns, received_utc), jpeg)
+                        if self._stop.is_set():
+                            self._counts["frames_discarded"] += 1
+                            break
+                    try:
+                        if self._observer is not None:
+                            self._observer.observe_frame(frame)
+                    except Exception as exc:
+                        self._disconnect_observer()
+                        with self._condition:
+                            self._counts["source_errors"] += 1
+                            self._counts["frames_discarded"] += 1
+                            self._error_type = type(exc).__name__
+                            self._discard_pending()
+                            self._condition.notify_all()
                         break
-                    if self._latest is not None:
-                        self._counts["frames_replaced"] += 1
-                    self._latest = frame
-                    self._counts["max_pending_frames"] = 1
-                    self._condition.notify_all()
+                    with self._condition:
+                        stopped = self._stop.is_set()
+                        if stopped:
+                            self._counts["frames_discarded"] += 1
+                        else:
+                            if self._latest is not None:
+                                self._counts["frames_replaced"] += 1
+                            self._latest = frame
+                            self._counts["max_pending_frames"] = 1
+                            self._condition.notify_all()
+                    if stopped:
+                        self._disconnect_observer()
+                        break
         finally:
+            self._disconnect_observer()
             self._close_source()
             with self._condition:
                 self._condition.notify_all()
@@ -226,26 +302,41 @@ class LatestFrameStream:
             return {**self._counts, "stream_id": self.stream_id,
                     "pending_frames": int(self._latest is not None),
                     "receiver_thread_alive": alive, "closed": self._closed,
+                    "observer_bound": self._observer is not None,
                     "source_error_type": self._error_type,
-                    "source_close_error_type": self._close_error_type}
+                    "source_close_error_type": self._close_error_type,
+                    "observer_disconnect_error_type": self._observer_disconnect_error_type}
 
     def close(self) -> None:
+        started = time.monotonic()
+        # Wake consumers even when an observer is slow. A hook still running
+        # keeps the owner guard, blocking publication until it sees stop below.
         with self._condition:
             self._closed = True
             self._stop.set()
             self._discard_pending()
             self._condition.notify_all()
             thread = self._thread
+        if self._observer is not None:
+            lock = self._observer.receive_lock
+            if not lock.acquire(timeout=self.shutdown_timeout):
+                raise FrameShutdownTimeout("Receive observer did not stop within shutdown_timeout")
+            try:
+                self._disconnect_observer()
+            finally:
+                lock.release()
         if thread is None:
             self._close_source()
         elif thread is threading.current_thread():
             raise FrameStreamError("Receiver cannot join itself")
         else:
-            thread.join(self.shutdown_timeout)
+            thread.join(max(0, self.shutdown_timeout - (time.monotonic() - started)))
             if thread.is_alive():
                 raise FrameShutdownTimeout("Source did not stop within shutdown_timeout")
         if self._close_error_type:
             raise FrameSourceFailed(f"Frame source close failed ({self._close_error_type})")
+        if self._observer_disconnect_error_type:
+            raise FrameSourceFailed(f"Frame observer disconnect failed ({self._observer_disconnect_error_type})")
 
     def __enter__(self) -> LatestFrameStream:
         return self.start()

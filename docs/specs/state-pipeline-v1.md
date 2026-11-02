@@ -1,6 +1,6 @@
 # State pipeline v1：最新帧与局面契约的只读联调
 
-开发 10B，2026-11-02。实现为 [`state_pipeline.py`](../../src/jcc_device/state_pipeline.py)，依赖已交付的 [game-state-v1](game-state-v1.md) 和 [vision-stream-v1](vision-stream-v1.md)。Schema 和语义规则仍以它们指定的真源为准。
+开发 10B / 10E，2026-11-02。实现为 [`state_pipeline.py`](../../src/jcc_device/state_pipeline.py)，依赖已交付的 [game-state-v1](game-state-v1.md)、[vision-stream-v1](vision-stream-v1.md) 和 [vision-stability-v1](vision-stability-v1.md)。Schema 和语义规则仍以它们指定的真源为准。10E 的接收线性化、证据前提和边界见 [vision-integration-v1](vision-integration-v1.md)。
 
 本模块完成来源、尺寸、上下文、未知字段、异步结果屏障和有效期的最小接通。没有准备阶段字段识别器，没有五格商店识别器，也没有模式或补丁核验器。唯一的正向视觉规则是**默认关闭、未校准的历史页面 OCR 实验**。合成测试不能证明真实场景识别正确。
 
@@ -13,9 +13,13 @@ PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic
 PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic --experimental-history
 PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source tablet --observations 3 --experimental-history
 PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic --state-only
+PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic --experimental-history --continuity synthetic --synthetic-delay-seconds 1.45
+PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source tablet --observations 3 --experimental-history --continuity unconfigured
 ```
 
 `--source synthetic` 使用内存生成的纯色 JPEG；启用历史实验时还使用固定的假 OCR。它只演示接口，不是从图片读出了游戏文字。`sample_kind=synthetic` 和逐条 `synthetic_ocr=true` 会明确标识。真实平板使用项目包装器选择默认设备，沿用 `TabletStream(capture_diagnostics=False)` 的 `--no-control --no-window --no-power-on`。
+
+新增 `--continuity disabled|unconfigured|synthetic`，默认 `disabled` 完整保留原保守路径。`unconfigured` 接通权威逐帧钩子，但没有校准和上下文证据，结果保持未知；`synthetic` 仅为生成图提供人工构造的校准/上下文夹具，并在打开任何设备前拒绝与 `--source tablet` 合用。固定合成上下文不是真实游戏的已核场景。`--synthetic-delay-seconds` 只给合成假 OCR 增加等待，不适用于平板。
 
 默认输出 JSON 报告，关键成员如下：
 
@@ -23,6 +27,7 @@ PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic 
 | --- | --- |
 | `single_frame_observations` | 每次任务的来源帧、时钟、上下文、尺寸、场景观察、固定证据代码、OCR 条数和实际处理时间。它是单帧观察记录，**不是 game-state-v1，也不是运行时当前值**。 |
 | `runtime_before_close` | 捕获仍在运行时读取的状态摘要；晚到结果可能全部被拒绝，即使该帧本身有观察结果。 |
+| `runtime_before_close_state` | 同一时刻完整、经校验的 `game-state-v1`；用于复核来源帧/锚帧和原始期限。保存后仍只是当时快照。 |
 | `state` | 退出捕获后经 Schema 和语义校验的完整 `game-state-v1`。关闭已使可用值失效，不能把这份文件作为仍在线的缓存。 |
 | `pipeline_stats/capture_stats/processor_stats` | 接纳、失效、发布/拒绝、取帧、替换、处理及清理计数；不代表识别正确数。 |
 | `validation` | `schema_and_semantics_passed`，或首帧未到时的 `no_frame_no_state`。首帧前不制造来源不明的局面。 |
@@ -41,11 +46,11 @@ PYTHONPATH=src .venv/bin/python -m jcc_device.state_pipeline --source synthetic 
 
 实际尺寸由 Pillow 解码该帧获得。没有额外旋转，所以 `rotation_applied_degrees=0` 指本模块未施加旋转，不声称知道平板硬件方向。`game_viewport` 和 `calibration_id` 为 `null`，不把全屏猜作已校准的游戏区域。实验 OCR 框从像素坐标转为来源整帧的归一化坐标；未知商店不生成区域或点击目标。
 
-`device_capture_time=null`：未测平板采集或真实显示时间。接收点位于主机拿到完整 JPEG 之后；本适配器还会先通知状态所有者撤销旧结果，因此该通知/校验的开销在接收时间前。scrcpy、ffmpeg、系统管道和设备内的积压仍未知。`receive_to_finish_seconds` 只能解释为**主机应用收帧到判断完成**，不能当作平板变化到识别、提示或操作的完整延迟。
+`device_capture_time=null`：未测平板采集或真实显示时间。接收点位于主机拿到完整 JPEG 之后。默认旧适配器先撤销旧结果，再由接收器打时间戳；连续性路径直接读取原源，立即记录字节接收时间，再在共同锁内分配 `FrameRef`、检查和入槽，因此检查耗时在该时间之后。scrcpy、ffmpeg、系统管道和设备内的积压仍未知。`receive_to_finish_seconds` 只能解释为**主机应用收帧到判断完成**，不能当作平板变化到识别、提示或操作的完整延迟。
 
 ## 3. 状态所有者与接收屏障
 
-数据流为：
+默认 `--continuity disabled` 的数据流保留为：
 
 ```text
 TabletStream（或合成源）
@@ -65,7 +70,24 @@ TabletStream（或合成源）
 
 所有更新由同一个带锁的状态所有者串行提交。每次提交均运行 `validate_state(candidate, previous=accepted)`，通过后原子替换，递增修订号。未知、识别、失效和断流都沿用同一校验路径。公共返回值是深拷贝，消费者改写它不会改变已接纳状态。
 
-`publish(context, result)` 只接纳当前 `FrameContext` 对应的同流、同主机时钟、同代数及同来源帧结果，且处理时间必须自洽、仍在截止时间内。身份不符、旧帧、旧代数、重复、未来时间和过期结果都计数拒绝。每个输入只接受本实验的**一个结果**；没有多方法融合入口，第二个结果不会覆盖第一个。将来若需同时接纳多个识别方法，须实现契约要求的冲突与显式复核，不可直接复用这项单结果约定静默决胜。
+可选连续性路径的数据流为：
+
+```text
+原始源 → LatestFrameStream 在 StatePipeline.receive_lock 内分配真实 FrameRef
+  → StatePipeline.observe_frame：每个序号先验证上下文、RGB 连续性和实际尺寸
+  → 同一状态所有者更新锚帧/字段屏障并校验
+  → 最新单槽（只有到这里才允许丢帧/替换）
+  → advance 选择已经检查的当前帧 → 原有单任务执行器
+  → publish 重新验证票据、原 TTL、字段水位、冲突与完整契约
+```
+
+`LatestFrameStream.bind_observer(pipeline)` 只能在启动前绑定一次，与旧 `InvalidatingFrameSource` 二选一。分配帧身份、检查和入槽全程持有与 `publish/snapshot` 相同的可重入锁；已分配的新帧检查尚未结束时，旧结果发布及状态读取均等待。原始源读取不持锁；尚未被这个有序接收者分配身份的底层字节不在应用连续性证明内。跳号不会补造，乱序不会忽略，中间 B 帧不会被 A→B→A 的末帧覆盖掉检查。
+
+只有显式 `RegionCalibration`、逐帧 `ContextEvidence`、相关与上下文区域完全相同且未超检查预算时，场景组才保留旧字段来源。历史识别器读取整帧 OCR，故其相关 ROI 的并集必须覆盖**整幅图像**，不能仅提供最终标题框。当前没有真实游戏校准或上下文/遮挡验证器，实机默认不能提供这些前提。失败帧更新未知水位并打断内部上下文段；解码失败不猜尺寸，只撤销已有可用值，下一张可解码帧才能建立新锚点。
+
+`publish(context, result)` 在保守路径仍只接纳当前 `FrameContext`。连续性路径允许同一已证明段的旧来源结果，但票据必须由本实例在权威接收帧上生成，证明末帧必须等于当前锚帧；完成时间、来源帧、观察时刻及原始截止时间不改写。仍逐一检查受影响字段的来源水位、同帧完成时间、未解决冲突，以及 `validate_state(candidate, previous=accepted)`；较新未知也能挡住旧结果。`frames` 保留锚帧、字段/候选引用的原帧；暂未引用的待识别来源在合并时只能按已证明的同代数几何恢复其原元数据。每个来源只接受**一个结果**，第二个结果不会静默覆盖；现有冲突须另行显式复核，不能通过场景单结果 API 解除，候选到期则撤为未知。
+
+程序接口新增 `continuity_enabled=False`、`calibration=None`、`context_provider=None`、`max_frame_age_seconds=1.0`、`max_check_seconds=0.25`。后两个默认是未校准的工程参数。验证器应有界且不执行慢 OCR；超过检查预算、帧新鲜度界限或提供者异常均失去继承资格。Python 无法强杀卡住的提供者：卡住时发布/读取被锁挡住，接收器 `close()` 会在总关闭预算后明确抛出 `FrameShutdownTimeout` 并保留存活统计；提供者返回后仍会处理停止并撤销，不能冒充关闭成功。`FrameContext` 第五项新增可空的进程内票据，原四参数构造保持兼容。
 
 `note_ingress` 只保护已进入本应用的完整帧；尚未从底层管道读出的画面变化仍不可见。本模块不能证明物理画面最新。
 
@@ -75,8 +97,9 @@ TabletStream（或合成源）
 | --- | --- |
 | 未启用历史实验或证据不足 | `scene=unknown`；模式、版本、阶段、回合、血量、金币、等级、五格商店均未知。 |
 | 历史实验的两类证据在同帧满足 | 仅 `scene=history/recognized`；阶段、回合、血量、金币、等级、商店为 `unknown/not_applicable`；当前模式、版本仍为未知。 |
-| 新帧接收、显式上下文失效 | 已有识别值变 `stale/value=null`，保留旧值及原始来源；旧任务封闭，依据旧场景派生的不适用状态撤销。 |
-| 新帧接纳 | 全字段引用该新帧并恢复未知，不复制旧数值或区域。 |
+| 默认路径新帧接收、或显式上下文失效 | 已有识别值变 `stale/value=null`，保留旧值及原始来源；旧任务封闭，依据旧场景派生的不适用状态撤销。 |
+| 默认路径新帧接纳、或可选路径连续性未通过 | 全字段引用该新帧并恢复未知，不复制旧数值或区域；坏图像无法提供尺寸时仅撤销旧状态。 |
+| 可选路径中逐帧精确检查同段通过 | 更新锚帧，保留场景及其不适用推断的原来源；未实现的模式与版本仍引用新帧未知。可在原期限内接纳同段待返回任务。 |
 | 当前时间到达/超过截止时间 | 场景变 `stale/reason=expired`；原观察、完成、截止时间不变，旧值仅留在 `last_known_value`。派生的不适用状态撤销。 |
 | 断流/停止 | 立即封闭任务并撤销当前可用值；无自动重连、无旧流沿用。 |
 
@@ -102,6 +125,6 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_game_state
 
 合成测试覆盖合法/未知封套、真实字节尺寸、来源时间、实验示意场景、未知商店与历史不适用、未核版本/模式、精确到期、完成时间屏障、不续期、陈旧/异流/异时钟/异代数结果、接收与交付间隙、显式切换、坏图像、断流、不可变快照，以及 Schema/语义反例。事件控制的异步测试证明晚任务在更新帧到达后被拒绝；这不是实际游戏中的识别正确率测试。
 
-本次新增测试 29 项通过，设备层全套 61 项（包含新增项）和契约 42 项回归均通过；合成 CLI 输出和本地保留的实机 `state` 通过项目环境的 Schema 与语义检查。
+10B 原交付为 29 项新增、61 项设备层及 42 项契约回归。10E 的最新合成/回归数量、真实时钟慢识别、实机像素诊断及其限制见本地 `资料/开发/10E_识别连续性联调.md`；实机无校准路径仍保持未知，不把合成通过称为实机可用。
 
-真实准备阶段的标注、独立验收场次和战斗字段识别样本均为 0。下一步需要真实且经独立复核的画面与标签、目标布局/ROI 标定、可靠的局部连续性判断及 TTL 校准，随后才能实现回合、血量、金币、等级和五格商店识别。版本敏感建议还需补丁/模式核验和资料映射。当前保守屏障会显著降低连续流中的发布率，这项取舍已有实机证据，不能通过放行旧结果来回避。
+真实准备阶段的标注、独立验收场次和战斗字段识别样本均为 0。下一步需要真实且经独立复核的画面与标签、目标布局/ROI 标定、可靠的上下文/可见性证据及 TTL 校准，随后才能实现回合、血量、金币、等级和五格商店识别。版本敏感建议还需补丁/模式核验和资料映射。精确连续性仍可能因实际画面变化频繁而无输出，不能用未经校准的差异阈值或放行旧结果来提高发布率。

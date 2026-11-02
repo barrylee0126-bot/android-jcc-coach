@@ -20,8 +20,9 @@ from typing import Callable
 from uuid import uuid4
 
 from .game_state_contract import CORE_FIELDS, iter_observations, make_validator, validate_state
-from .latest import Frame, FrameRef, LatestFrameStream
-from .recognition import FrameProcessor, FrameResult
+from .latest import Frame, FrameRef, LatestFrameStream, positive_seconds
+from .recognition import FrameProcessor, FrameResult, PixelROI
+from .stability import ContextEvidence, ExactPixelContinuity, RecognitionTicket, RegionCalibration
 
 
 HOST_CLOCK_ID = "python-monotonic-" + uuid4().hex  # New domain identity per process.
@@ -54,6 +55,7 @@ class FrameContext:
     host_clock_id: str
     context_epoch: int
     image_size: tuple[int, int]
+    continuity_ticket: RecognitionTicket | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -144,41 +146,75 @@ class SceneRecognizer:
 
 
 class StatePipeline:
-    """One serialized state owner for one stream/clock; all inputs are barriers.
+    """One serialized state owner; optional exact continuity for the scene group.
 
-    No calibrated change detector exists here. Every admitted frame advances
-    context_epoch and resets every field to unknown before recognition. Reuse
-    across frames is intentionally absent. TTL is experimental, receive-based.
-    Public dictionaries are copies, not mutable references to accepted state.
+    The default remains the conservative all-input barrier. Opt-in continuity
+    requires authoritative pre-mailbox observe_frame calls and explicit current
+    calibration/context evidence. Its absence never enables cross-frame reuse.
+    Public dictionaries are copies. TTL remains experimental and receive-based.
     """
 
     def __init__(self, *, stream_id: str, sample_kind: str, scene_ttl_ms: float = 2000,
-                 host_clock_id: str = HOST_CLOCK_ID, clock_ns: Callable[[], int] = time.monotonic_ns):
+                 host_clock_id: str = HOST_CLOCK_ID, clock_ns: Callable[[], int] = time.monotonic_ns,
+                 continuity_enabled: bool = False, calibration: RegionCalibration | None = None,
+                 context_provider: Callable[[Frame], ContextEvidence | None] | None = None,
+                 max_frame_age_seconds: float = 1.0, max_check_seconds: float = 0.25):
         if not stream_id or not host_clock_id or sample_kind not in ("synthetic", "live", "replay"):
             raise ValueError("Explicit stream, host clock and sample kind are required")
         if isinstance(scene_ttl_ms, bool) or not math.isfinite(scene_ttl_ms) or scene_ttl_ms <= 0:
             raise ValueError("scene_ttl_ms must be finite and positive")
         self.stream_id, self.sample_kind = stream_id, sample_kind
         self.host_clock_id, self._scene_ttl_ms, self._clock = host_clock_id, scene_ttl_ms, clock_ns
-        self.freshness_policy_id = f"state-pipeline-v1:all-input-barrier:scene-{scene_ttl_ms:g}ms:uncalibrated"
+        self._continuity_enabled = bool(continuity_enabled)
+        self._max_check_ns = int(positive_seconds(max_check_seconds, "max_check_seconds") * 1e9)
+        self._context_provider = context_provider
+        self._continuity = (ExactPixelContinuity(calibration, host_clock_id=host_clock_id,
+                            max_result_age_seconds=scene_ttl_ms / 1000,
+                            max_frame_age_seconds=max_frame_age_seconds, clock_ns=clock_ns)
+                            if self._continuity_enabled else None)
+        if calibration is not None and calibration.applied_rotation_degrees != 0:
+            raise ValueError("This receiver does not apply rotation; calibration must describe its decoded image")
+        policy = "exact-received-scene" if self._continuity_enabled else "all-input-barrier"
+        self.freshness_policy_id = f"state-pipeline-v1:{policy}:scene-{scene_ttl_ms:g}ms:uncalibrated"
+        if self._continuity_enabled:
+            self.freshness_policy_id += f":frame-{max_frame_age_seconds:g}s:check-{max_check_seconds:g}s"
         self._validator = make_validator()
         self._lock = threading.RLock()
         self._state: dict | None = None
         self._context: FrameContext | None = None
         self._input_valid, self._published, self._disconnected = False, False, False
         self._ingress_sequence = 0
+        self._segment_generation: int | None = None
+        self._segment_valid = False
+        self._published_sequence = 0
+        self._last_check_reason = "not_observed"
         self._counts = dict(frames_admitted=0, ingress_invalidations=0, results_accepted=0,
-                            results_rejected=0, expiration_updates=0)
+                            results_rejected=0, expiration_updates=0, ingress_frames_checked=0,
+                            ingress_ready=0, ingress_unknown=0, check_timeouts=0,
+                            context_provider_errors=0, ingress_check_ns_total=0,
+                            ingress_check_ns_max=0, context_provider_ns_total=0)
         self._rejections: dict[str, int] = {}
 
     @property
     def scene_ttl_ms(self) -> float:
         return self._scene_ttl_ms
 
+    @property
+    def receive_lock(self):
+        """Reentrant guard used by LatestFrameStream before FrameRef allocation."""
+        return self._lock
+
+    @property
+    def continuity_enabled(self) -> bool:
+        return self._continuity_enabled
+
     def _now(self) -> float:
         now = self._clock() / 1_000_000
         if not math.isfinite(now) or now < 0 or (
                 self._state is not None and now < self._state["assembled_host_monotonic_ms"]):
+            if self.continuity_enabled:
+                self._disconnected, self._input_valid, self._segment_valid = True, False, False
+                self._continuity.disconnect()
             raise ValueError("Host monotonic clock regressed or is invalid")
         return now
 
@@ -193,12 +229,157 @@ class StatePipeline:
     def _commit(self, state: dict, now: float) -> None:
         state["assembled_host_monotonic_ms"] = now
         state["snapshot_revision"] = 0 if self._state is None else self._state["snapshot_revision"] + 1
+        needed = {state["frame_id"]}
+        for _, observation in iter_observations(state):
+            needed.add(observation["source_frame_id"])
+            needed.update(candidate["source_frame_id"] for candidate in observation.get("candidates", ()))
+        state["frames"] = [record for record in state["frames"] if record["frame_id"] in needed]
         validate_state(state, previous=self._state, validator=self._validator)
         self._state = state
+
+    @staticmethod
+    def _record(source: FrameRef, epoch: int, image: dict) -> dict:
+        return {"frame_id": source.frame_id, "sequence": source.sequence, "context_epoch": epoch,
+                "host_received_monotonic_ms": source.host_received_monotonic_ns / 1_000_000,
+                "device_capture_time": None, "image": image}
+
+    def _empty_state(self, record: dict, now: float, reason: str = "not_attempted") -> dict:
+        state = {"schema_version": "game-state-v1", "sample_kind": self.sample_kind,
+                 "stream_id": self.stream_id, "host_clock_id": self.host_clock_id,
+                 "context_epoch": record["context_epoch"], "frame_id": record["frame_id"],
+                 "freshness_policy_id": self.freshness_policy_id, "frames": [record]}
+        state.update({key: self._unknown(record, now, reason) for key in CORE_FIELDS})
+        state["scene"]["applicability"] = "applicable"
+        state["mode"]["reason"] = "current_mode_unverified"
+        state["game_version"]["reason"] = "version_unverified"
+        state["shop"] = [{"slot": slot, "content": self._unknown(record, now, reason)} for slot in range(1, 6)]
+        return state
+
+    def _full_recognizer_coverage(self) -> bool:
+        """The current history recognizer reads the entire image, including blockers.
+
+        Merely covering the returned title box cannot cover those inputs. Check
+        the union of explicitly calibrated relevant ROIs, without guessing ROIs.
+        Context coverage sufficiency still needs the caller's actual verifier.
+        """
+        calibration = self._continuity.calibration
+        if calibration is None:
+            return False
+        width, height = calibration.image_size
+        boxes = [roi.box for roi in calibration.relevant_regions]
+        xs = sorted({0, width, *(x for box in boxes for x in (box[0], box[2]))})
+        for left, right in zip(xs, xs[1:]):
+            covered = 0
+            for top, bottom in sorted((box[1], box[3]) for box in boxes
+                                      if box[0] <= left and box[2] >= right):
+                if top > covered:
+                    return False
+                covered = max(covered, bottom)
+            if covered < height:
+                return False
+        return True
+
+    def observe_frame(self, frame: Frame) -> FrameContext | None:
+        """Synchronous authoritative receive hook, before ANY latest-slot loss.
+
+        Bind this owner to LatestFrameStream; only the receiver calls this hook.
+        advance() then selects an already-checked delivery, never rechecks a
+        lossy subset or assigns replacement sequence numbers.
+        """
+        with self._lock:
+            if not self.continuity_enabled:
+                self.note_ingress(frame.source.sequence)
+                return self.advance(frame)
+            started = time.perf_counter_ns()
+            source, now = frame.source, self._now()
+            if (self._disconnected or source.stream_id != self.stream_id or
+                    type(source.sequence) is not int or source.sequence < 1 or
+                    type(source.host_received_monotonic_ns) is not int or
+                    not 0 <= source.host_received_monotonic_ns / 1_000_000 <= now or
+                    source.sequence <= self._ingress_sequence or
+                    (self._context is not None and source.host_received_monotonic_ns <
+                     self._context.source.host_received_monotonic_ns)):
+                self._segment_valid = False
+                self._invalidate("invalidated", now)
+                # The proof owner must see disorder too; do not silently skip it.
+                self._continuity.observe(frame, None)
+                raise FrameAdmissionRejected("Invalid authoritative frame order, stream or reception time")
+            self._ingress_sequence = source.sequence
+            provider_started = time.perf_counter_ns()
+            try:
+                evidence = None if self._context_provider is None else self._context_provider(frame)
+            except Exception:
+                evidence = None
+                self._counts["context_provider_errors"] += 1
+            self._counts["context_provider_ns_total"] += time.perf_counter_ns() - provider_started
+            coverage = self._full_recognizer_coverage()
+            check = self._continuity.observe(frame, evidence if coverage else None)
+            self._counts["ingress_frames_checked"] += 1
+            try:
+                image = image_metadata(frame)
+            except Exception:
+                elapsed = time.perf_counter_ns() - started
+                self._counts["ingress_check_ns_total"] += elapsed
+                self._counts["ingress_check_ns_max"] = max(self._counts["ingress_check_ns_max"], elapsed)
+                self._segment_valid = False
+                self._last_check_reason = "decode_failed"
+                self._counts["ingress_unknown"] += 1
+                self._invalidate("invalidated", self._now())
+                return None  # No invented dimensions; a later real frame may recover.
+            elapsed = time.perf_counter_ns() - started
+            self._counts["ingress_check_ns_total"] += elapsed
+            self._counts["ingress_check_ns_max"] = max(self._counts["ingress_check_ns_max"], elapsed)
+            now = self._now()
+            reason = check.reason
+            if self._continuity.calibration is not None and not coverage:
+                reason = "recognizer_coverage_unproven"
+            timed_out = (elapsed >= self._max_check_ns or
+                         self._clock() - source.host_received_monotonic_ns >= self._continuity.max_frame_age_ns)
+            if timed_out:
+                reason = "check_timeout"
+                self._counts["check_timeouts"] += 1
+            ready = check.status == "ready" and coverage and not timed_out
+            ticket = self._continuity.ticket() if ready else None
+            ready = ready and ticket is not None
+            if not ready and reason in ("baseline", "unchanged", "pixels_changed", "context_changed"):
+                reason = "continuity_unproven"
+            continuous = ready and self._segment_valid and check.generation == self._segment_generation
+            epoch = (self._context.context_epoch if continuous else
+                     0 if self._context is None else self._context.context_epoch + 1)
+            if ready:
+                image["calibration_id"] = self._continuity.calibration.calibration_id
+            record = self._record(source, epoch, image)
+            # Expiry may occur while checking a new frame. Keep original stale
+            # provenance, then advance the anchor; never commit an expired value.
+            self._refresh(now)
+            if continuous:
+                state = deepcopy(self._state)
+                state.update(frame_id=source.frame_id, context_epoch=epoch)
+                state["frames"].append(record)
+                for key, why in (("mode", "current_mode_unverified"), ("game_version", "version_unverified")):
+                    state[key] = self._unknown(record, now, why)
+            else:
+                state = self._empty_state(record, now, "not_attempted" if ready else reason)
+                self._counts["ingress_invalidations"] += 1
+            self._commit(state, now)
+            self._context = FrameContext(source, self.host_clock_id, epoch,
+                                         (image["width_px"], image["height_px"]), ticket)
+            self._input_valid, self._published = ready, False
+            self._segment_valid = ready
+            self._segment_generation = check.generation if ready else None
+            self._last_check_reason = reason
+            self._counts["ingress_ready" if ready else "ingress_unknown"] += 1
+            self._counts["frames_admitted"] += 1
+            return self._context
 
     def advance(self, frame: Frame) -> FrameContext:
         """Register one actual image. Failures never invent dimensions or timestamps."""
         with self._lock:
+            if self.continuity_enabled:
+                if (self._disconnected or self._context is None or frame.source != self._context.source or
+                        frame.source.sequence != self._ingress_sequence):
+                    raise FrameAdmissionRejected("Select only the latest authoritative checked delivery")
+                return self._context
             source, now = frame.source, self._now()
             if (self._disconnected or source.stream_id != self.stream_id or
                     type(source.sequence) is not int or source.sequence < 1 or
@@ -217,19 +398,8 @@ class StatePipeline:
                 raise
             now = self._now()
             epoch = 0 if self._context is None else self._context.context_epoch + 1
-            record = {"frame_id": source.frame_id, "sequence": source.sequence, "context_epoch": epoch,
-                      "host_received_monotonic_ms": source.host_received_monotonic_ns / 1_000_000,
-                      "device_capture_time": None, "image": image}
-            state = {"schema_version": "game-state-v1", "sample_kind": self.sample_kind,
-                     "stream_id": self.stream_id, "host_clock_id": self.host_clock_id,
-                     "context_epoch": epoch, "frame_id": source.frame_id,
-                     "freshness_policy_id": self.freshness_policy_id, "frames": [record]}
-            state.update({key: self._unknown(record, now, "not_attempted") for key in CORE_FIELDS})
-            state["scene"]["applicability"] = "applicable"
-            state["mode"]["reason"] = "current_mode_unverified"
-            state["game_version"]["reason"] = "version_unverified"
-            state["shop"] = [{"slot": slot, "content": self._unknown(record, now, "not_attempted")}
-                             for slot in range(1, 6)]
+            record = self._record(source, epoch, image)
+            state = self._empty_state(record, now)
             self._commit(state, now)
             self._context = FrameContext(source, self.host_clock_id, epoch,
                                          (image["width_px"], image["height_px"]))
@@ -246,19 +416,46 @@ class StatePipeline:
         """One sanitized scene result per frame. This is not a multi-method merger."""
         with self._lock:
             now = self._now()
-            if self._disconnected or not self._input_valid or context != self._context:
+            if self.continuity_enabled:
+                self._refresh(now)
+            if (self._disconnected or not self._input_valid or self._context is None or
+                    (context.context_epoch != self._context.context_epoch if self.continuity_enabled
+                     else context != self._context)):
                 return self._reject("obsolete_context_or_stream")
             if result.source != context.source or context.host_clock_id != self.host_clock_id:
                 return self._reject("source_or_clock_mismatch")
-            if self._published:
+            if self.continuity_enabled:
+                decision = self._continuity.validate_result(context.continuity_ticket, result)
+                if decision.status != "proven":
+                    return self._reject("continuity_" + decision.reason)
+                proof = decision.proof
+                if (proof.verified_through != self._context.source or proof.source != context.source or
+                        proof.generation != self._segment_generation or
+                        context.image_size != proof.calibration.image_size or
+                        proof.host_clock_id != self.host_clock_id):
+                    return self._reject("continuity_anchor_or_context_mismatch")
+                if context.source.sequence <= self._published_sequence:
+                    return self._reject("duplicate_result" if context.source.sequence == self._published_sequence
+                                        else "field_watermark")
+            elif self._published:
                 return self._reject("duplicate_result")
             observed = result.source.host_received_monotonic_ns / 1_000_000
             started = result.processing_started_monotonic_ns / 1_000_000
             finished = result.processing_finished_monotonic_ns / 1_000_000
             if not observed <= started <= finished <= now:
                 return self._reject("invalid_processing_time")
-            if finished < self._state["scene"]["completed_host_monotonic_ms"]:
-                return self._reject("completion_precedes_input_barrier")
+            records = {record["frame_id"]: record for record in self._state["frames"]}
+            scene_group = [(path, observation) for path, observation in iter_observations(self._state)
+                           if path not in ("/mode", "/game_version")]
+            for _, observation in scene_group:
+                prior = records[observation["source_frame_id"]]
+                if prior["sequence"] > context.source.sequence:
+                    return self._reject("field_watermark")
+                if (prior["sequence"] == context.source.sequence and
+                        finished < observation["completed_host_monotonic_ms"]):
+                    return self._reject("completion_precedes_input_barrier")
+                if observation["status"] == "conflict":
+                    return self._reject("explicit_conflict_review_required")
             if now >= observed + self.scene_ttl_ms:
                 return self._reject("expired_result")
             evidence = result.value
@@ -267,7 +464,15 @@ class StatePipeline:
             if not isinstance(evidence, SceneEvidence) or evidence.scene not in (None, "history"):
                 return self._reject("unsupported_scene_result")
             state = deepcopy(self._state)
-            record = state["frames"][-1]
+            record = records.get(context.source.frame_id)
+            if record is None:
+                # A checked but unreferenced source can have been pruned while
+                # its task was running. The proof fixes its original geometry,
+                # calibration and epoch; reconstruct exactly that metadata.
+                image = deepcopy(state["frames"][-1]["image"])
+                record = self._record(context.source, context.context_epoch, image)
+                state["frames"].append(record)
+                state["frames"].sort(key=lambda item: item["sequence"])
             completed = finished  # Preserve actual completion; never retimestamp a late result.
             if evidence.scene is None:
                 state["scene"] = self._unknown(record, completed, evidence.reason, applicability="applicable")
@@ -287,11 +492,13 @@ class StatePipeline:
                     slot["content"]["method"] = {"kind": "fusion", "name": "history-page-applicability", "version": "v1"}
             self._commit(state, now)
             self._published = True
+            self._published_sequence = context.source.sequence
             self._counts["results_accepted"] += 1
             return True
 
-    def _invalidate(self, reason: str, now: float) -> None:
-        self._input_valid = False
+    def _invalidate(self, reason: str, now: float, *, seal_inputs: bool = True) -> None:
+        if seal_inputs:
+            self._input_valid = False
         if self._state is None:
             return
         state = deepcopy(self._state)
@@ -300,6 +507,10 @@ class StatePipeline:
         for _, observation in iter_observations(state):
             if observation["status"] == "recognized":
                 observation.update(status="stale", last_known_value=observation["value"], value=None, reason=reason)
+                changed = True
+            elif observation["status"] == "conflict":
+                observation.clear()
+                observation.update(self._unknown(record, now, reason))
                 changed = True
             elif observation["status"] == "unknown" and observation["reason"] != reason:
                 observation.update(self._unknown(record, now, reason,
@@ -319,31 +530,52 @@ class StatePipeline:
                 raise ValueError("Ingress sequence must increase")
             self._ingress_sequence = sequence
             self._counts["ingress_invalidations"] += 1
+            self._segment_valid = False
             self._invalidate("invalidated", self._now())
 
     def invalidate_context(self) -> None:
         """Explicit overlay/layout notification; next actual frame gets a new epoch."""
         with self._lock:
+            self._segment_valid = False
             self._invalidate("invalidated", self._now())
 
     def disconnect(self) -> None:
         with self._lock:
             self._disconnected = True
+            self._segment_valid = False
+            if self._continuity is not None:
+                self._continuity.disconnect()
             self._invalidate("disconnected", self._now())
 
+    def _refresh(self, now: float) -> None:
+        if self._disconnected:
+            self._invalidate("disconnected", now)
+            return
+        if self._state is not None and (
+                (self._state["scene"]["status"] == "recognized" and
+                 now >= self._state["scene"]["expires_host_monotonic_ms"]) or
+                any(observation["status"] == "conflict" and any(
+                    now >= candidate["expires_host_monotonic_ms"] for candidate in observation["candidates"])
+                    for _, observation in iter_observations(self._state))):
+            self._invalidate("expired", now, seal_inputs=not self.continuity_enabled)
+            self._counts["expiration_updates"] += 1
+        if (self.continuity_enabled and self._segment_valid and
+                self._continuity.ticket() is None):
+            self._segment_valid = False
+            self._last_check_reason = "continuity_unavailable_or_frame_timeout"
+            self._invalidate("invalidated", now)
+
     def snapshot(self) -> dict | None:
-        """Runtime read: expire scene and revoke its derived non-applicability."""
+        """Runtime read: recheck original TTL and receive-path liveness."""
         with self._lock:
-            now = self._now()
-            if self._state is not None and self._state["scene"]["status"] == "recognized" and (
-                    now >= self._state["scene"]["expires_host_monotonic_ms"]):
-                self._invalidate("expired", now)
-                self._counts["expiration_updates"] += 1
+            self._refresh(self._now())
             return deepcopy(self._state)
 
     def stats(self) -> dict:
         with self._lock:
-            return {**self._counts, "rejections": dict(self._rejections), "disconnected": self._disconnected}
+            return {**self._counts, "rejections": dict(self._rejections), "disconnected": self._disconnected,
+                    "continuity_enabled": self.continuity_enabled, "last_check_reason": self._last_check_reason,
+                    "continuity": None if self._continuity is None else self._continuity.stats()}
 
 
 class InvalidatingFrameSource:
@@ -416,13 +648,33 @@ class _SyntheticSource:
 
 
 class _SyntheticOCR:
+    def __init__(self, delay_seconds: float = 0):
+        self.delay_seconds = delay_seconds
+
     def recognize(self, image_bytes):
+        time.sleep(self.delay_seconds)
         return [{"text": "对局记录", "x": 50, "y": 30, "width": 100, "height": 30},
                 {"text": "最近对局", "x": 50, "y": 100, "width": 100, "height": 30}]
 
 
+def _synthetic_continuity_configuration():
+    """Artificial fixture ground truth ONLY, never usable on the tablet source."""
+    size = (800, 500)
+    calibration = RegionCalibration("synthetic-full-frame-v1", "synthetic-fixture:generated-rgb-v1", size,
+                                   (PixelROI("all-recognizer-inputs", size, (0, 0, *size)),),
+                                   (PixelROI("synthetic-context", size, (0, 0, *size)),))
+
+    def context(frame):
+        return ContextEvidence(frame.source, HOST_CLOCK_ID, 0, "synthetic-generated-layout-v1",
+                               calibration.calibration_id, "synthetic-fixture:context-and-visibility-v1",
+                               "landscape", 0, True)
+
+    return calibration, context
+
+
 def run_probe(*, source_name: str, observations: int = 1, experimental_history: bool = False,
-              scene_ttl_ms: float = 2000, timeout_seconds: float = 15) -> dict:
+              scene_ttl_ms: float = 2000, timeout_seconds: float = 15,
+              continuity_mode: str = "disabled", synthetic_delay_seconds: float = 0) -> dict:
     """Bounded smoke run; one OCR job, continued receipt/admission, sanitized JSON.
 
     A per-frame observation is reported even if it is rejected by the live owner.
@@ -434,11 +686,20 @@ def run_probe(*, source_name: str, observations: int = 1, experimental_history: 
     report = {"source": source_name, "sample_kind": "live" if source_name == "tablet" else "synthetic",
               "images_saved": 0, "ocr_text_emitted": False, "device_capture_time_measured": False,
               "experimental_history": experimental_history, "single_frame_observations": [],
+              "continuity_mode": continuity_mode,
+              "calibration_basis": "synthetic_fixture_only" if continuity_mode == "synthetic" else "unconfigured",
               "observation_is_runtime_current": False,
               "latency_boundary": "Mac complete-JPEG receipt only; device display/capture and advice not measured"}
     stream = pipeline = processor = None
     try:
         with ExitStack() as stack:
+            if continuity_mode not in ("disabled", "unconfigured", "synthetic"):
+                raise ValueError("Unsupported continuity mode")
+            if continuity_mode == "synthetic" and source_name != "synthetic":
+                raise ValueError("Synthetic calibration cannot be used on a tablet")
+            positive_seconds(synthetic_delay_seconds, "synthetic_delay_seconds", allow_zero=True)
+            if source_name != "synthetic" and synthetic_delay_seconds:
+                raise ValueError("Synthetic delay is only for generated input")
             if source_name == "tablet":
                 from .stream import TabletStream
                 raw = stack.enter_context(TabletStream(capture_diagnostics=False))
@@ -446,11 +707,17 @@ def run_probe(*, source_name: str, observations: int = 1, experimental_history: 
                 raw = _SyntheticSource()
             else:
                 raise ValueError("Unsupported source")
-            barrier_source = InvalidatingFrameSource(raw)
-            stream = LatestFrameStream(barrier_source)
+            barrier_source = InvalidatingFrameSource(raw) if continuity_mode == "disabled" else None
+            stream = LatestFrameStream(barrier_source if barrier_source is not None else raw)
+            calibration, context_provider = (_synthetic_continuity_configuration()
+                                             if continuity_mode == "synthetic" else (None, None))
             pipeline = StatePipeline(stream_id=stream.stream_id, sample_kind=report["sample_kind"],
-                                     scene_ttl_ms=scene_ttl_ms)
-            barrier_source.bind(pipeline)
+                                     scene_ttl_ms=scene_ttl_ms, continuity_enabled=continuity_mode != "disabled",
+                                     calibration=calibration, context_provider=context_provider)
+            if barrier_source is not None:
+                barrier_source.bind(pipeline)
+            else:
+                stream.bind_observer(pipeline)
             stack.enter_context(stream)
             ocr = None
             if experimental_history:
@@ -458,7 +725,7 @@ def run_probe(*, source_name: str, observations: int = 1, experimental_history: 
                     from .vision_ocr import VisionOCR
                     ocr = stack.enter_context(VisionOCR(timeout=min(timeout_seconds, 8)))
                 else:
-                    ocr = _SyntheticOCR()
+                    ocr = _SyntheticOCR(synthetic_delay_seconds)
             processor = FrameProcessor(SceneRecognizer(ocr, experimental_history=experimental_history))
             # Executor exits before OCR/stream teardown; the OCR exchange itself
             # has a bounded timeout. There is never a queue of submitted frames.
@@ -500,7 +767,9 @@ def run_probe(*, source_name: str, observations: int = 1, experimental_history: 
                 if future is None:
                     ticket = context
                     future = executor.submit(processor.process, frame)
-            report["runtime_before_close"] = state_summary(pipeline.snapshot())
+            runtime_state = pipeline.snapshot()
+            report["runtime_before_close"] = state_summary(runtime_state)
+            report["runtime_before_close_state"] = runtime_state
             report["status"] = "ok"
     except Exception as exc:
         # Source/OCR messages may contain account text or device identifiers.
@@ -530,14 +799,20 @@ def main() -> int:
     parser.add_argument("--experimental-history", action="store_true")
     parser.add_argument("--scene-ttl-ms", type=float, default=2000)
     parser.add_argument("--timeout-seconds", type=float, default=15)
+    parser.add_argument("--continuity", choices=("disabled", "unconfigured", "synthetic"), default="disabled",
+                        help="逐帧连续性；synthetic 校准仅允许用于合成源，实机缺少证据时保持未知")
+    parser.add_argument("--synthetic-delay-seconds", type=float, default=0,
+                        help="仅用于合成假 OCR 的等待时间，不是实机识别成绩")
     parser.add_argument("--state-only", action="store_true", help="只输出校验后的最终状态；停止后值已撤销")
     args = parser.parse_args()
     if (args.observations < 1 or not math.isfinite(args.scene_ttl_ms) or args.scene_ttl_ms <= 0 or
-            not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0 or args.timeout_seconds > 60):
+            not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0 or args.timeout_seconds > 60 or
+            not math.isfinite(args.synthetic_delay_seconds) or not 0 <= args.synthetic_delay_seconds <= 60):
         parser.error("Positive counts/TTL and a timeout in (0, 60] are required")
     report = run_probe(source_name=args.source, observations=args.observations,
                        experimental_history=args.experimental_history, scene_ttl_ms=args.scene_ttl_ms,
-                       timeout_seconds=args.timeout_seconds)
+                       timeout_seconds=args.timeout_seconds, continuity_mode=args.continuity,
+                       synthetic_delay_seconds=args.synthetic_delay_seconds)
     print(json.dumps(report.get("state") if args.state_only else report, ensure_ascii=False, allow_nan=False))
     return 0 if report["status"] == "ok" else 1
 
