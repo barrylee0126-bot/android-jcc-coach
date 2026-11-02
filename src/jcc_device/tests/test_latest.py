@@ -6,7 +6,7 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from jcc_device.latest import (FrameShutdownTimeout, FrameSourceFailed,
                                FrameStreamClosed, FrameStreamError, LatestFrameStream)
@@ -201,6 +201,51 @@ class LatestFrameTests(unittest.TestCase):
         self.assertEqual(stream.stats()["close_errors"], 1)
         self.assertFalse(stream.stats()["receiver_thread_alive"])
 
+    def test_concurrent_close_waits_for_in_progress_source_close(self):
+        source = ControlledSource()
+        entered, release = threading.Event(), threading.Event()
+        calls, errors = [], []
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+
+        def slow_close():
+            calls.append(threading.current_thread().name)
+            entered.set()
+            release.wait(2)
+
+        def close_once():
+            try:
+                stream.close()
+            except BaseException as error:
+                errors.append(error)
+
+        source.close = slow_close
+        closer = threading.Thread(target=close_once, daemon=True)
+        closer.start()
+        try:
+            self.assertTrue(entered.wait(1))
+            with self.assertRaises(FrameShutdownTimeout):
+                stream.close()
+            self.assertEqual(len(calls), 1)
+        finally:
+            release.set()
+            closer.join(2)
+        self.assertFalse(closer.is_alive())
+        self.assertEqual(errors, [])
+        stream.close()
+        self.assertEqual(len(calls), 1)
+
+    def test_interrupted_source_close_stays_reported_as_failure(self):
+        source = ControlledSource()
+        source.close = Mock(side_effect=KeyboardInterrupt("private-close-detail"))
+        stream = LatestFrameStream(source)
+        with self.assertRaises(KeyboardInterrupt):
+            stream.close()
+        with self.assertRaises(FrameSourceFailed) as failure:
+            stream.close()
+        self.assertNotIn("private-close-detail", str(failure.exception))
+        self.assertEqual(stream.stats()["source_close_error_type"], "KeyboardInterrupt")
+        source.close.assert_called_once_with()
+
     def test_lifecycle_and_invalid_timeouts(self):
         source = ControlledSource()
         stream = LatestFrameStream(source)
@@ -217,6 +262,257 @@ class LatestFrameTests(unittest.TestCase):
         for value in (-1, float("nan"), float("inf")):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 stream.read_latest(value)
+
+    def test_receiver_start_failure_disconnects_without_inverting_observer_lock_order(self):
+        source = ControlledSource()
+        stream = LatestFrameStream(source, read_timeout=.01)
+        guard = threading.RLock()
+        holding, attempted, inspected = threading.Event(), threading.Event(), threading.Event()
+        disconnects, errors, start_errors = [], [], []
+
+        def disconnect():
+            self.assertTrue(guard._is_owned())
+            disconnects.append(stream.stats()["closed"])
+
+        stream.bind_observer(SimpleNamespace(stream_id=stream.stream_id, receive_lock=guard,
+                                             disconnect=disconnect, observe_frame=lambda frame: None))
+
+        def publish_and_inspect():
+            try:
+                with guard:
+                    holding.set()
+                    if not attempted.wait(1):
+                        raise AssertionError("Receiver start was not attempted")
+                    # This may take _condition while holding receive_lock.
+                    # Startup failure cleanup must release _condition first.
+                    stream.stats()
+                    inspected.set()
+            except BaseException as error:
+                errors.append(type(error).__name__)
+
+        def start_stream():
+            try:
+                stream.start()
+            except BaseException as error:
+                start_errors.append(type(error).__name__)
+
+        real_start = threading.Thread.start
+
+        def fail_receiver(thread):
+            if thread.name.startswith("jcc-receiver-"):
+                attempted.set()
+                raise RuntimeError("private-thread-start-detail")
+            return real_start(thread)
+
+        holder = threading.Thread(target=publish_and_inspect, daemon=True)
+        starter = threading.Thread(target=start_stream, daemon=True)
+        holder.start()
+        self.assertTrue(holding.wait(1))
+        with patch("jcc_device.latest.threading.Thread.start", new=fail_receiver):
+            starter.start()
+            starter.join(2)
+            holder.join(2)
+        self.assertFalse(starter.is_alive())
+        self.assertFalse(holder.is_alive())
+        self.assertTrue(inspected.is_set())
+        self.assertEqual(errors, [])
+        self.assertEqual(start_errors, ["RuntimeError"])
+        self.assertEqual(disconnects, [True])
+        self.assertEqual(source.close_calls, 1)
+        self.assertFalse(source.entered.is_set())
+        stream.close()
+        self.assertEqual(source.close_calls, 1)
+
+    def test_interrupted_start_after_receiver_enters_read_preserves_ownership(self):
+        source = ControlledSource()
+        release = threading.Event()
+        close_threads = []
+        receiver = []
+
+        def read_frame(timeout):
+            source.entered.set()
+            release.wait(2)
+            return b"late-synthetic-frame"
+
+        def close_source():
+            close_threads.append(threading.current_thread().name)
+            source.close_calls += 1
+
+        source.read_frame = read_frame
+        source.close = close_source
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+        observer = SimpleNamespace(stream_id=stream.stream_id, receive_lock=threading.RLock(),
+                                   disconnect=Mock(), observe_frame=Mock())
+        stream.bind_observer(observer)
+        real_start = threading.Thread.start
+
+        def interrupt_after_read(thread):
+            receiver.append(thread)
+            real_start(thread)
+            if not source.entered.wait(1):
+                raise AssertionError("Receiver did not enter synthetic read")
+            raise KeyboardInterrupt("synthetic startup interruption")
+
+        try:
+            with patch("jcc_device.latest.threading.Thread.start", new=interrupt_after_read):
+                with self.assertRaises(KeyboardInterrupt) as interruption:
+                    stream.start()
+            self.assertTrue(any("shutdown_timeout" in note
+                                for note in interruption.exception.__notes__))
+            self.assertTrue(stream.stats()["closed"])
+            self.assertTrue(stream.stats()["receiver_thread_alive"])
+            self.assertEqual(source.close_calls, 0)
+            observer.disconnect.assert_called()
+            with self.assertRaises(FrameStreamClosed):
+                stream.read_latest(0)
+        finally:
+            release.set()
+            if receiver:
+                receiver[0].join(2)
+            stream.close()
+        self.assertEqual(close_threads, [receiver[0].name])
+        self.assertEqual(source.close_calls, 1)
+        self.assertFalse(stream.stats()["receiver_thread_alive"])
+        self.assertEqual(stream.stats()["pending_frames"], 0)
+        observer.observe_frame.assert_not_called()
+
+    def test_interrupted_before_receiver_start_closes_in_caller(self):
+        source = ControlledSource()
+        source.close = Mock(wraps=source.close)
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+        with patch("jcc_device.latest.threading.Thread.start", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                stream.start()
+        self.assertTrue(stream.stats()["closed"])
+        self.assertFalse(stream.stats()["receiver_thread_alive"])
+        self.assertFalse(source.entered.is_set())
+        source.close.assert_called_once_with()
+        stream.close()
+        source.close.assert_called_once_with()
+
+    def test_failed_start_with_busy_observer_is_bounded_and_closes_unclaimed_source(self):
+        source = ControlledSource()
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+        guard = threading.RLock()
+        held, release = threading.Event(), threading.Event()
+        observer = SimpleNamespace(stream_id=stream.stream_id, receive_lock=guard,
+                                   disconnect=Mock(), observe_frame=Mock())
+        stream.bind_observer(observer)
+
+        def hold_observer():
+            with guard:
+                held.set()
+                release.wait(2)
+
+        holder = threading.Thread(target=hold_observer, daemon=True)
+        holder.start()
+        try:
+            self.assertTrue(held.wait(1))
+            with patch("jcc_device.latest.threading.Thread.start", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt) as interruption:
+                    stream.start()
+            self.assertTrue(any("observer" in note.lower()
+                                for note in interruption.exception.__notes__))
+            self.assertEqual(source.close_calls, 1)
+            self.assertFalse(source.entered.is_set())
+            observer.disconnect.assert_not_called()
+        finally:
+            release.set()
+            holder.join(2)
+            stream.close()
+        observer.disconnect.assert_called_once_with()
+        self.assertEqual(source.close_calls, 1)
+
+    def test_interrupted_start_before_source_claim_blocks_late_receiver_read(self):
+        source = ControlledSource()
+        entered_target, release_target = threading.Event(), threading.Event()
+        close_threads, receiver = [], []
+        source.close = lambda: close_threads.append(threading.current_thread().name)
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+        original_receive = stream._receive
+
+        def delayed_receive():
+            entered_target.set()
+            release_target.wait(2)
+            original_receive()
+
+        stream._receive = delayed_receive
+        real_start = threading.Thread.start
+
+        def interrupt_before_claim(thread):
+            receiver.append(thread)
+            real_start(thread)
+            if not entered_target.wait(1):
+                raise AssertionError("Synthetic receiver did not reach target")
+            raise KeyboardInterrupt("synthetic startup interruption")
+
+        try:
+            with patch("jcc_device.latest.threading.Thread.start", new=interrupt_before_claim):
+                with self.assertRaises(KeyboardInterrupt) as interruption:
+                    stream.start()
+            self.assertTrue(any("shutdown_timeout" in note
+                                for note in interruption.exception.__notes__))
+            self.assertTrue(stream.stats()["receiver_thread_alive"])
+            self.assertEqual(close_threads, [threading.current_thread().name])
+            self.assertFalse(source.entered.is_set())
+        finally:
+            release_target.set()
+            if receiver:
+                receiver[0].join(2)
+            stream.close()
+        self.assertFalse(source.entered.is_set())
+        self.assertEqual(close_threads, [threading.current_thread().name])
+        self.assertFalse(stream.stats()["receiver_thread_alive"])
+
+    def test_late_thread_bootstrap_after_interruption_cannot_read_closed_source(self):
+        source = ControlledSource()
+        entered_target, release_target, launch = (threading.Event() for _ in range(3))
+        receiver, errors = [], []
+        stream = LatestFrameStream(source, shutdown_timeout=.03)
+        original_receive = stream._receive
+        real_start = threading.Thread.start
+
+        def delayed_receive():
+            entered_target.set()
+            release_target.wait(2)
+            original_receive()
+
+        def launch_late():
+            try:
+                if not launch.wait(2):
+                    raise AssertionError("Synthetic late launch was not released")
+                real_start(receiver[0])
+                receiver[0].join(2)
+            except BaseException as error:
+                errors.append(error)
+
+        def interrupt_before_bootstrap(thread):
+            receiver.append(thread)
+            raise KeyboardInterrupt("synthetic startup interruption")
+
+        stream._receive = delayed_receive
+        launcher = threading.Thread(target=launch_late, daemon=True)
+        launcher.start()
+        try:
+            with patch("jcc_device.latest.threading.Thread.start", new=interrupt_before_bootstrap):
+                with self.assertRaises(KeyboardInterrupt):
+                    stream.start()
+            self.assertFalse(stream.stats()["receiver_thread_alive"])
+            self.assertEqual(source.close_calls, 1)
+            launch.set()
+            self.assertTrue(entered_target.wait(1))
+            self.assertTrue(stream.stats()["receiver_thread_alive"])
+            self.assertFalse(source.entered.is_set())
+        finally:
+            launch.set()
+            release_target.set()
+            launcher.join(2)
+            stream.close()
+        self.assertFalse(launcher.is_alive())
+        self.assertEqual(errors, [])
+        self.assertFalse(source.entered.is_set())
+        self.assertEqual(source.close_calls, 1)
+        self.assertFalse(stream.stats()["receiver_thread_alive"])
 
 
 class LegacyByteSourceTests(unittest.TestCase):

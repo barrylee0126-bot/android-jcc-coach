@@ -21,7 +21,8 @@ class FrameSource(Protocol):
     """An already-open source. Both read_frame and close must be bounded.
 
     A read timeout is recoverable; any other read exception is terminal.
-    Only the receiver thread calls these methods after start().
+    After a successful start(), only the receiver thread calls these methods.
+    If startup fails before the receiver claims the source, the caller closes it.
     """
 
     def read_frame(self, timeout: float = 10.0) -> bytes: ...
@@ -79,6 +80,8 @@ class FrameObserver(Protocol):
     receive_lock is a reentrant lock also held by that owner's publication and
     read paths. FrameRef allocation, synchronous checking and mailbox insertion
     share this guard, so a result cannot publish during an unchecked receipt.
+    All disconnect callbacks share it too, including receiver error/finally
+    paths, so publication is ordered before withdrawal or sees disconnection.
     The source read happens outside it; lower-level buffered bytes are not an
     authoritative application frame until this guarded allocation.
     """
@@ -102,9 +105,10 @@ class LatestFrameStream:
     """Single-consumer latest-frame mailbox owning an already-open source.
 
     start() never opens the source. close() wakes waiting consumers immediately,
-    then joins the receiver, which closes the source itself. This avoids closing
-    a pipe while another thread is reading it. A misbehaving source that ignores
-    its timeout is reported as FrameShutdownTimeout, never as a clean shutdown.
+    then waits for receiver work and source closure to finish. The receiver closes
+    a source it owns, avoiding closing a pipe while another thread is reading it.
+    A misbehaving source that ignores its timeout is reported as
+    FrameShutdownTimeout, never as a clean shutdown.
     Instances cannot be restarted; a new instance gets a new stream_id.
     """
 
@@ -117,6 +121,19 @@ class LatestFrameStream:
         self._condition = threading.Condition()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        # Thread.join()/is_alive() can falsely report a stopped thread after
+        # SIGINT on Python 3.11. Keep independent witnesses for the target and
+        # source-close completion, and never use join to prove cleanup.
+        self._receiver_entered = threading.Event()
+        self._receiver_finished = threading.Event()
+        self._receiver_expected = False
+        self._source_close_finished = threading.Event()
+        # The receiver claims the source before its first read. Startup failure
+        # can instead leave it with the caller, even if a native thread was
+        # created but has not yet reached its target. Never acquire _condition
+        # or the observer's receive_lock while holding this lock.
+        self._source_owner_lock = threading.Lock()
+        self._source_owner: str | None = None
         self._latest: Frame | None = None
         self._closed = False
         self._source_closed = False
@@ -148,34 +165,65 @@ class LatestFrameStream:
 
     def _disconnect_observer(self) -> None:
         if self._observer is not None:
-            try:
-                self._observer.disconnect()
-            except Exception as exc:
-                # Cleanup must still close the source when the owner's clock
-                # or contract fails. Never expose the callback exception text.
-                with self._condition:
-                    if self._observer_disconnect_error_type is None:
-                        self._counts["source_errors"] += 1
-                    self._observer_disconnect_error_type = type(exc).__name__
-                    self._error_type = type(exc).__name__
-                    self._discard_pending()
-                    self._condition.notify_all()
+            # Never enter from inside _condition: publication/receipt uses
+            # receive_lock -> _condition. Reentrancy permits calls from the
+            # observe hook and close's bounded acquisition of the same guard.
+            with self._receive_guard():
+                try:
+                    self._observer.disconnect()
+                except Exception as exc:
+                    # Cleanup must still close the source when the owner's clock
+                    # or contract fails. Never expose the callback exception text.
+                    with self._condition:
+                        if self._observer_disconnect_error_type is None:
+                            self._counts["source_errors"] += 1
+                        self._observer_disconnect_error_type = type(exc).__name__
+                        self._error_type = type(exc).__name__
+                        self._discard_pending()
+                        self._condition.notify_all()
 
     def start(self) -> LatestFrameStream:
+        start_error = None
         with self._condition:
             if self._closed:
                 raise FrameStreamClosed("A closed latest-frame stream cannot be restarted")
             if self._thread is not None:
                 raise FrameStreamError("Latest-frame receiver has already been started")
-            self._thread = threading.Thread(target=self._receive, daemon=True,
-                                            name=f"jcc-receiver-{self.stream_id[:8]}")
             try:
+                self._thread = threading.Thread(target=self._receive_entry, daemon=True,
+                                                name=f"jcc-receiver-{self.stream_id[:8]}")
                 self._thread.start()
-            except BaseException:
-                self._thread = None
+                self._receiver_expected = True
+                with self._source_owner_lock:
+                    self._source_owner = "receiver"
+            except BaseException as error:
                 self._closed = True
-                self._close_source()
-                raise
+                with self._source_owner_lock:
+                    self._stop.set()
+                    if self._source_owner is None:
+                        self._source_owner = "caller"
+                self._discard_pending()
+                self._condition.notify_all()
+                start_error = error
+        if start_error is not None:
+            # close() preserves receive_lock -> _condition order and has a
+            # bounded wait. If a receiver owns the source, only it closes it.
+            try:
+                self.close()
+            except FrameStreamError as cleanup_error:
+                start_error.add_note(str(cleanup_error))
+            except BaseException as cleanup_error:
+                # Preserve the first startup error without suppressing a second
+                # KeyboardInterrupt (or another interruption during cleanup).
+                raise cleanup_error from start_error
+            finally:
+                # If the observer lock is stuck, there is no receiver to close
+                # an unclaimed source; do it even when bounded cleanup fails.
+                with self._source_owner_lock:
+                    caller_owns_source = self._source_owner == "caller"
+                if caller_owns_source:
+                    self._close_source()
+            raise start_error
         return self
 
     def _discard_pending(self) -> None:
@@ -190,13 +238,30 @@ class LatestFrameStream:
             self._source_closed = True
         try:
             self.source.close()
-        except Exception as exc:
+        except BaseException as exc:
             with self._condition:
                 self._counts["close_errors"] += 1
                 self._close_error_type = type(exc).__name__
                 self._condition.notify_all()
+            if not isinstance(exc, Exception):
+                raise
+        finally:
+            # This marks the end of the close attempt, not necessarily success;
+            # failures are retained in _close_error_type and reported by close().
+            self._source_close_finished.set()
+
+    def _receive_entry(self) -> None:
+        self._receiver_entered.set()
+        try:
+            self._receive()
+        finally:
+            self._receiver_finished.set()
 
     def _receive(self) -> None:
+        with self._source_owner_lock:
+            if self._source_owner == "caller":
+                return
+            self._source_owner = "receiver"
         try:
             while not self._stop.is_set():
                 try:
@@ -254,10 +319,14 @@ class LatestFrameStream:
                         self._disconnect_observer()
                         break
         finally:
-            self._disconnect_observer()
-            self._close_source()
-            with self._condition:
-                self._condition.notify_all()
+            try:
+                self._disconnect_observer()
+            finally:
+                try:
+                    self._close_source()
+                finally:
+                    with self._condition:
+                        self._condition.notify_all()
 
     def read_latest(self, timeout: float = 10.0, *, max_age_seconds: float | None = None) -> Frame:
         """Take and remove the newest unread frame. timeout=0 is a poll.
@@ -298,7 +367,7 @@ class LatestFrameStream:
 
     def stats(self) -> dict:
         with self._condition:
-            alive = self._thread is not None and self._thread.is_alive()
+            alive = self._receiver_pending(self._thread)
             return {**self._counts, "stream_id": self.stream_id,
                     "pending_frames": int(self._latest is not None),
                     "receiver_thread_alive": alive, "closed": self._closed,
@@ -306,6 +375,15 @@ class LatestFrameStream:
                     "source_error_type": self._error_type,
                     "source_close_error_type": self._close_error_type,
                     "observer_disconnect_error_type": self._observer_disconnect_error_type}
+
+    def _receiver_pending(self, thread: threading.Thread | None) -> bool:
+        if thread is None or self._receiver_finished.is_set():
+            return False
+        # is_alive is only a positive witness before the target enters, never
+        # proof of completion. An interrupted pre-start can create a thread
+        # which has not entered yet; the source-owner gate prevents a late read.
+        return (self._receiver_expected or self._receiver_entered.is_set()
+                or thread.is_alive())
 
     def close(self) -> None:
         started = time.monotonic()
@@ -317,6 +395,8 @@ class LatestFrameStream:
             self._discard_pending()
             self._condition.notify_all()
             thread = self._thread
+        with self._source_owner_lock:
+            caller_owns_source = self._source_owner == "caller"
         if self._observer is not None:
             lock = self._observer.receive_lock
             if not lock.acquire(timeout=self.shutdown_timeout):
@@ -325,14 +405,15 @@ class LatestFrameStream:
                 self._disconnect_observer()
             finally:
                 lock.release()
-        if thread is None:
+        if thread is None or caller_owns_source:
             self._close_source()
-        elif thread is threading.current_thread():
+        if thread is threading.current_thread():
             raise FrameStreamError("Receiver cannot join itself")
-        else:
-            thread.join(max(0, self.shutdown_timeout - (time.monotonic() - started)))
-            if thread.is_alive():
+        elif self._receiver_pending(thread):
+            if not self._receiver_finished.wait(max(0, self.shutdown_timeout - (time.monotonic() - started))):
                 raise FrameShutdownTimeout("Source did not stop within shutdown_timeout")
+        if not self._source_close_finished.wait(max(0, self.shutdown_timeout - (time.monotonic() - started))):
+            raise FrameShutdownTimeout("Source close did not finish within shutdown_timeout")
         if self._close_error_type:
             raise FrameSourceFailed(f"Frame source close failed ({self._close_error_type})")
         if self._observer_disconnect_error_type:
