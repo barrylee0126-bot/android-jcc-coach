@@ -1,0 +1,387 @@
+{
+  "schema_version": "rapid-ocr-candidate-validation-v1",
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "scope": "optional_offline_transcription_only_prototype",
+  "human_annotation": false,
+  "geometry_evidence": false,
+  "live_use_authorized": false,
+  "eligible_for_policy": false,
+  "eligible_for_execution": false,
+  "accuracy": null,
+  "unit_tests": {
+    "count": 35,
+    "status": "passed",
+    "optional_packages_required": false,
+    "command": "PYTHONPATH=src python3 -B -S -m unittest discover -s src/jcc_rapid_ocr_candidate/tests -v"
+  },
+  "historical_final": {
+    "schema_version": "rapid-candidate-aggregate-smoke-v1",
+    "mode": "four_existing_historical_crops_not_accuracy",
+    "status": "passed",
+    "original_input_count": 4,
+    "fresh_process_count": 3,
+    "repetitions_per_input_per_process": 6,
+    "request_count": 72,
+    "consistent_request_count": 72,
+    "inputs_and_baseline_unchanged": true,
+    "startup_ms": {
+      "n": 3,
+      "min": 2333.50775,
+      "p50": 2528.910375,
+      "p95_nearest_rank": 2557.0963330000004,
+      "max": 2557.0963330000004
+    },
+    "startup_components_ms": {
+      "wheel_and_installed_file_verification": {
+        "n": 3,
+        "min": 884.3717919953633,
+        "p50": 887.7111670153681,
+        "p95_nearest_rank": 914.2288329894654,
+        "max": 914.2288329894654
+      },
+      "optional_import": {
+        "n": 3,
+        "min": 1268.627541983733,
+        "p50": 1455.9901250177063,
+        "p95_nearest_rank": 1463.4682500036433,
+        "max": 1463.4682500036433
+      },
+      "engine_and_model_load": {
+        "n": 3,
+        "min": 44.08724998938851,
+        "p50": 45.490541990147904,
+        "p95_nearest_rank": 49.694291985360906,
+        "max": 49.694291985360906
+      }
+    },
+    "warmup_ms": {
+      "n": 3,
+      "min": 35.55391600821167,
+      "p50": 37.00595800182782,
+      "p95_nearest_rank": 38.06741701555438,
+      "max": 38.06741701555438
+    },
+    "request_wall_ms": {
+      "n": 72,
+      "min": 5.739584000000075,
+      "p50": 6.235791499999532,
+      "p95_nearest_rank": 7.393999999999679,
+      "max": 9.706249999999805
+    },
+    "inference_ms": {
+      "n": 72,
+      "min": 5.461875000037253,
+      "p50": 5.89368749933783,
+      "p95_nearest_rank": 7.042708981316537,
+      "max": 9.107542020501569
+    },
+    "network_denied_all_processes": true,
+    "providers": [
+      "CPUExecutionProvider"
+    ],
+    "human_label_count": 0,
+    "accuracy": null,
+    "evidence_kind": "transcription_only",
+    "geometry_evidence": false,
+    "live_use_authorized": false
+  },
+  "synthetic_final": {
+    "schema_version": "rapid-candidate-aggregate-smoke-v1",
+    "mode": "synthetic_only",
+    "status": "passed",
+    "original_input_count": 1,
+    "fresh_process_count": 3,
+    "repetitions_per_input_per_process": 6,
+    "request_count": 18,
+    "consistent_request_count": 18,
+    "inputs_and_baseline_unchanged": true,
+    "startup_ms": {
+      "n": 3,
+      "min": 2350.9692080000004,
+      "p50": 2463.2554580000005,
+      "p95_nearest_rank": 2538.4751250000004,
+      "max": 2538.4751250000004
+    },
+    "startup_components_ms": {
+      "wheel_and_installed_file_verification": {
+        "n": 3,
+        "min": 888.5407079942524,
+        "p50": 897.529250010848,
+        "p95_nearest_rank": 921.2776670174208,
+        "max": 921.2776670174208
+      },
+      "optional_import": {
+        "n": 3,
+        "min": 1282.8225000121165,
+        "p50": 1378.8575000071432,
+        "p95_nearest_rank": 1427.0782910170965,
+        "max": 1427.0782910170965
+      },
+      "engine_and_model_load": {
+        "n": 3,
+        "min": 44.31708401534706,
+        "p50": 47.51883298740722,
+        "p95_nearest_rank": 54.2157499876339,
+        "max": 54.2157499876339
+      }
+    },
+    "warmup_ms": {
+      "n": 3,
+      "min": 35.800041019683704,
+      "p50": 38.29399999813177,
+      "p95_nearest_rank": 39.502166997408494,
+      "max": 39.502166997408494
+    },
+    "request_wall_ms": {
+      "n": 18,
+      "min": 5.885957999999913,
+      "p50": 6.316520499999978,
+      "p95_nearest_rank": 7.082083000000239,
+      "max": 7.082083000000239
+    },
+    "inference_ms": {
+      "n": 18,
+      "min": 5.634875007672235,
+      "p50": 5.9811664978042245,
+      "p95_nearest_rank": 6.671417009783909,
+      "max": 6.671417009783909
+    },
+    "network_denied_all_processes": true,
+    "providers": [
+      "CPUExecutionProvider"
+    ],
+    "human_label_count": 0,
+    "accuracy": null,
+    "evidence_kind": "transcription_only",
+    "geometry_evidence": false,
+    "live_use_authorized": false
+  },
+  "real_runtime_negative_checks": {
+    "status": "passed",
+    "checks": [
+      "unguarded_worker_refuses_without_connecting",
+      "missing_model_no_packaged_fallback",
+      "invalid_model_no_download",
+      "same_size_wrong_model_rejected",
+      "missing_wheels_no_install",
+      "corrupt_png_closes_worker_without_retry",
+      "size_mismatch_closes_worker_without_retry",
+      "unapplied_exif_closes_worker_without_retry"
+    ],
+    "check_count": 8,
+    "synthetic_only": true,
+    "evidence_kind": "transcription_only",
+    "geometry_evidence": false,
+    "human_annotation": false,
+    "live_use_authorized": false,
+    "eligible_for_execution": false
+  },
+  "earlier_development_measurements": {
+    "stage": "before_interpreter_fingerprint_guard_added",
+    "historical": {
+      "schema_version": "rapid-candidate-aggregate-smoke-v1",
+      "mode": "four_existing_historical_crops_not_accuracy",
+      "status": "passed",
+      "original_input_count": 4,
+      "fresh_process_count": 3,
+      "repetitions_per_input_per_process": 6,
+      "request_count": 72,
+      "consistent_request_count": 72,
+      "inputs_and_baseline_unchanged": true,
+      "startup_ms": {
+        "n": 3,
+        "min": 2260.646167,
+        "p50": 2296.1271669999996,
+        "p95_nearest_rank": 2401.572208,
+        "max": 2401.572208
+      },
+      "startup_components_ms": {
+        "wheel_and_installed_file_verification": {
+          "n": 3,
+          "min": 853.9207499998156,
+          "p50": 854.185125004733,
+          "p95_nearest_rank": 878.8494580076076,
+          "max": 878.8494580076076
+        },
+        "optional_import": {
+          "n": 3,
+          "min": 1230.6160409934819,
+          "p50": 1231.682500016177,
+          "p95_nearest_rank": 1376.9464590004645,
+          "max": 1376.9464590004645
+        },
+        "engine_and_model_load": {
+          "n": 3,
+          "min": 44.65133300982416,
+          "p50": 44.92170800222084,
+          "p95_nearest_rank": 45.67616700660437,
+          "max": 45.67616700660437
+        }
+      },
+      "warmup_ms": {
+        "n": 3,
+        "min": 35.611582978162915,
+        "p50": 36.26195798278786,
+        "p95_nearest_rank": 36.38779200264253,
+        "max": 36.38779200264253
+      },
+      "request_wall_ms": {
+        "n": 72,
+        "min": 5.450207999999623,
+        "p50": 6.030165999999726,
+        "p95_nearest_rank": 7.1190000000003195,
+        "max": 27.03804200000004
+      },
+      "inference_ms": {
+        "n": 72,
+        "min": 5.26162501773797,
+        "p50": 5.71516650961712,
+        "p95_nearest_rank": 6.596416991669685,
+        "max": 23.09654201962985
+      },
+      "network_denied_all_processes": true,
+      "providers": [
+        "CPUExecutionProvider"
+      ],
+      "human_label_count": 0,
+      "accuracy": null,
+      "evidence_kind": "transcription_only",
+      "geometry_evidence": false,
+      "live_use_authorized": false
+    },
+    "synthetic": {
+      "schema_version": "rapid-candidate-aggregate-smoke-v1",
+      "mode": "synthetic_only",
+      "status": "passed",
+      "original_input_count": 1,
+      "fresh_process_count": 3,
+      "repetitions_per_input_per_process": 6,
+      "request_count": 18,
+      "consistent_request_count": 18,
+      "inputs_and_baseline_unchanged": true,
+      "startup_ms": {
+        "n": 3,
+        "min": 2481.8948330000003,
+        "p50": 2536.4784999999997,
+        "p95_nearest_rank": 3000.671625,
+        "max": 3000.671625
+      },
+      "startup_components_ms": {
+        "wheel_and_installed_file_verification": {
+          "n": 3,
+          "min": 880.7276250154246,
+          "p50": 907.3651249927934,
+          "p95_nearest_rank": 1328.827082994394,
+          "max": 1328.827082994394
+        },
+        "optional_import": {
+          "n": 3,
+          "min": 1423.0894169886597,
+          "p50": 1447.89429201046,
+          "p95_nearest_rank": 1457.6762090146076,
+          "max": 1457.6762090146076
+        },
+        "engine_and_model_load": {
+          "n": 3,
+          "min": 45.24279199540615,
+          "p50": 47.09712500334717,
+          "p95_nearest_rank": 54.05725000309758,
+          "max": 54.05725000309758
+        }
+      },
+      "warmup_ms": {
+        "n": 3,
+        "min": 35.86500001256354,
+        "p50": 36.5199169900734,
+        "p95_nearest_rank": 39.5028339989949,
+        "max": 39.5028339989949
+      },
+      "request_wall_ms": {
+        "n": 18,
+        "min": 5.6435829999994525,
+        "p50": 5.975417000000149,
+        "p95_nearest_rank": 6.4361249999986825,
+        "max": 6.4361249999986825
+      },
+      "inference_ms": {
+        "n": 18,
+        "min": 5.396499997004867,
+        "p50": 5.6731465010670945,
+        "p95_nearest_rank": 6.097625009715557,
+        "max": 6.097625009715557
+      },
+      "network_denied_all_processes": true,
+      "providers": [
+        "CPUExecutionProvider"
+      ],
+      "human_label_count": 0,
+      "accuracy": null,
+      "evidence_kind": "transcription_only",
+      "geometry_evidence": false,
+      "live_use_authorized": false
+    },
+    "interpretation": "Retained observed outliers; not independent samples and not upper bounds or accuracy."
+  },
+  "source_sha256": {
+    "src/jcc_rapid_ocr_candidate/worker.py": "6028f795e1ab14ff101afc32a82716207c72fa4aa566770b0aa7a9c76a9ccb30",
+    "src/jcc_rapid_ocr_candidate/requirements-18a.lock": "3e3b1467a3dc0f72c26575d53870eb0e20828524226a2aa6cdbaabe8cd7957c2",
+    "src/jcc_rapid_ocr_candidate/audit.py": "cceb4449c7a0feca3c485af372887b9f77550501362a374d27758ea12393aefc",
+    "src/jcc_rapid_ocr_candidate/__init__.py": "77f55debccc1c87acdbce42c66e0bff2783dc0886f96fb686a2f5fba4cc0576a",
+    "src/jcc_rapid_ocr_candidate/runtime.py": "41ac7ba683662dccaeb419dcb88e0fc4395b9f8dcfcaf4fdb1958877702a1f27",
+    "src/jcc_rapid_ocr_candidate/contract.py": "661ec18ada4d5d085857f4bccf0616f6c9fc0309840e5823f6acd86566eff5c3",
+    "src/jcc_rapid_ocr_candidate/__main__.py": "6c38c01f371253c529a40abce2116b14c7b7c14551d7f63c4116b2df85a2214b",
+    "src/jcc_rapid_ocr_candidate/tests/__init__.py": "f8f428843cac75e085b29cf910738be8c31808246be26c40864b0363963e2291",
+    "src/jcc_rapid_ocr_candidate/tests/test_candidate.py": "625235dcf216e638418488ef69b3c036581d12df912c496cf3167c69671dcd4f",
+    "src/jcc_rapid_ocr_candidate/tests/smoke_offline.py": "7c87c387bfbab2a5c78b4a47065a003968c56f5576bd8ac2702c2d600289c5f0",
+    "src/jcc_rapid_ocr_candidate/tests/smoke_failures.py": "924a84c6611b08f6ec4cde938a62de7fb4fb6de6a1a92e0b220298c880183200",
+    "docs/specs/rapid-ocr-candidate-v1.md": "a8339bafe86fdf817156addcf4444f03cf91b627d15e0676e73bce56f331b3cc"
+  },
+  "boundary_check": {
+    "original_file_count": 254,
+    "changed": [
+      "src/jcc_realtime_probe/events.py",
+      "src/jcc_realtime_probe/core.py",
+      "src/jcc_realtime_probe/processor.py",
+      "src/jcc_realtime_probe/runtime.py",
+      "src/jcc_realtime_overlay_bridge/synthetic.py",
+      "src/jcc_realtime_overlay_bridge/bridge.py",
+      "src/jcc_realtime_overlay_bridge/__init__.py",
+      "src/jcc_realtime_overlay_bridge/runtime.py",
+      "src/jcc_realtime_overlay_bridge/clocks.py",
+      "src/jcc_realtime_overlay_bridge/tests/test_bridge.py",
+      "src/jcc_hypothesis_advice/engine.py",
+      "src/jcc_hypothesis_advice/tests/test_context_boundaries.py",
+      "src/jcc_recipe_candidate/core.py",
+      "src/jcc_recipe_candidate/tests/test_candidates.py",
+      "src/jcc_recipe_candidate/tests/test_runtime_cli.py",
+      "src/jcc_recipe_candidate/vendor/SOURCE.md",
+      "docs/specs/realtime-probe-v1.md",
+      "docs/specs/timed-overlay-v1.md",
+      "docs/specs/recipe-candidate-v1.md",
+      "docs/specs/conditional-advice-v1.md",
+      ".gitignore",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "interpretation": "These existing paths changed during shared-workspace work. This chat wrote only its new package, designated spec, and local report; authorship of other changes is not inferred.",
+    "critical_originals_unchanged_at_check": {
+      "AGENTS.md": true,
+      "requirements.txt": true,
+      "README.md": true,
+      "src/jcc_device/vision_ocr.py": true,
+      "src/jcc_device/roi_recognition.py": true,
+      "src/jcc_device/vision_ocr.swift": true,
+      "src/jcc_device/game_state_contract.py": true,
+      "src/jcc_device/state_pipeline.py": true,
+      "src/jcc_strategy/engine.py": true,
+      "tools/vision_ocr": true,
+      "tools/adb": true,
+      "tools/scrcpy": true
+    },
+    "forbidden_materials_in_new_package": []
+  },
+  "third_party_assets_copied_into_package": false,
+  "root_dependencies_modified_by_this_chat": false,
+  "device_or_recording_access_by_this_chat": false,
+  "git_commands_by_this_chat": false
+}

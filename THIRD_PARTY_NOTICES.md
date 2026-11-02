@@ -9,5 +9,6 @@
 | [scrcpy](https://github.com/Genymobile/scrcpy) | Genymobile 及贡献者 | [Apache-2.0](https://github.com/Genymobile/scrcpy/blob/v5.0.1/LICENSE) | 获取 USB 平板画面；安装脚本下载官方 macOS ARM 发行包并检查 SHA-256。 | `v5.0.1` |
 | [Qwen3-VL](https://github.com/QwenLM/Qwen3-VL) | Qwen 团队 | [Apache-2.0](https://github.com/QwenLM/Qwen3-VL/blob/main/LICENSE) | 可选的本机场景识别实验，通过本机 Ollama 调用；模型需另行下载，不包含在仓库中。 | `qwen3-vl:4b-instruct` |
 | [tft-advisor](https://github.com/ndh0408/tft-advisor) | ndh0408 | [MIT](https://github.com/ndh0408/tft-advisor/blob/8380b6dbeffe9edade7b198d8063bc3e18917b6d/LICENSE) | 装备配方候选实验直接包含 `craftableFrom` 函数片段及其原始许可；不包含上游游戏数据或素材。 | `8380b6dbeffe9edade7b198d8063bc3e18917b6d` |
+| [RapidOCR](https://github.com/RapidAI/RapidOCR) | RapidAI 及贡献者 | [Apache-2.0](https://github.com/RapidAI/RapidOCR/blob/bd941dae09da793e76c6ba15c7aaf40f8424232a/LICENSE) | 可选离线文字转写实验调用已固定的官方发行包；不包含上游源码、依赖包或模型。模型来源及单独许可见 [RapidOCR 模型许可说明](https://github.com/RapidAI/RapidOCR/blob/bd941dae09da793e76c6ba15c7aaf40f8424232a/python/MODEL_LICENSES.md)。 | `v3.10.0` / `bd941dae09da793e76c6ba15c7aaf40f8424232a` |
 
 Python 依赖及其传递依赖各自适用对应的软件许可证；版本资料与游戏内容并未包含在本仓库中。

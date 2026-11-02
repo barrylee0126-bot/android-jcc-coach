@@ -1,0 +1,33 @@
+{
+  "schema_version": "rapid-candidate-path-alias-validation-v1",
+  "date": "2026-11-02",
+  "scope": "synthetic_path_and_standard_library_regression_only",
+  "independent_agent_review": true,
+  "human_annotation": false,
+  "real_model_used_for_this_fix": false,
+  "accuracy": null,
+  "cases": [
+    "parent_symlink_alias",
+    "parent_symlink_loop",
+    "site_symlink_rejected",
+    "installed_file_symlink_rejected",
+    "wheel_symlink_rejected",
+    "child_directory_escape_rejected",
+    "wheel_archive_escape_rejected"
+  ],
+  "standard_library_tests": {
+    "per_environment": 62,
+    "independently_reviewed_python_versions": ["3.9.6", "3.11.16", "3.14.7"],
+    "temporary_directory_kinds": ["macos_default_alias", "resolved_path"],
+    "all_six_runs_passed": true,
+    "command": "PYTHONPATH=src python3 -B -m unittest discover -s src/jcc_rapid_ocr_candidate/tests -q"
+  },
+  "reviewed_sha256": {
+    "src/jcc_rapid_ocr_candidate/audit.py": "6195a1d1f41e9ae26693f390da454ff3baca75c9e7ce00b6fe200672a9b5f2b9",
+    "src/jcc_rapid_ocr_candidate/tests/test_candidate.py": "cd26d7d108c9c2047e199348ce1413062ba5fdd963b4f570cefc29734d52a723"
+  },
+  "limitations": [
+    "No game image, tablet, live latency, or model accuracy was tested for this path fix.",
+    "Historical validation records bind the earlier source versions and do not authenticate this fix."
+  ]
+}
