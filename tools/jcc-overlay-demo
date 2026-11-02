@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [ -x "$project_dir/.venv/bin/python" ]; then
+    overlay_python="$project_dir/.venv/bin/python"
+else
+    overlay_python=python3
+fi
+export PYTHONPATH="$project_dir/src"
+export PYTHONDONTWRITEBYTECODE=1
+exec "$overlay_python" -B -m jcc_overlay "$@"

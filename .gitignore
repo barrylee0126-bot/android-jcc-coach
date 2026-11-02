@@ -21,6 +21,8 @@
 !/schemas/examples/sample-annotation-v1.example.json
 /tests/*
 !/tests/test_game_state_v1.py
+!/tests/test_overlay_http.py
+!/tests/test_overlay_lifecycle.py
 
 /src/**/__pycache__/
 /src/**/*.pyc
@@ -30,6 +32,7 @@
 !/tools/jcc-observe
 !/tools/jcc-scene
 !/tools/jcc-decision-demo
+!/tools/jcc-overlay-demo
 !/tools/setup-macos
 
 # Local configuration, third-party checkouts, models, captures and environments

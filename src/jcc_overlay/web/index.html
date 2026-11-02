@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>短提示 · 模拟演示</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/overlay.css">
+  <script src="/overlay.js" defer></script>
+</head>
+<body>
+  <main class="demo-shell">
+    <header class="page-heading">
+      <p class="eyebrow">金铲铲教练 / 阅读体验原型</p>
+      <h1>一眼看到，及时撤下。</h1>
+      <p class="intro">把短提示放在投屏旁边。这里的一切内容均为虚构。</p>
+    </header>
+
+    <section class="preview" aria-label="短提示预览">
+      <div class="preview-heading"><span>投屏侧预览</span><button id="open-window" class="text-button" type="button">打开小窗 <span aria-hidden="true">↗</span></button></div>
+      <article id="hint" class="hint" data-state="unknown" aria-label="模拟短提示">
+        <div class="hint-topline">
+          <span class="simulation-badge">模拟演示</span>
+          <div class="hint-status"><span id="state-label">信息不足</span><span id="countdown" hidden></span></div>
+          <button id="collapse" class="collapse-button" type="button" aria-expanded="true" aria-controls="hint-content">收起</button>
+        </div>
+        <div id="hint-content" class="hint-content" aria-live="polite" aria-atomic="true">
+          <p id="target" class="target" hidden></p>
+          <h2 id="action">信息不足，暂不建议</h2>
+          <p id="reason" class="reason">先在下方选择一种演示状态。</p>
+        </div>
+        <progress id="lifetime" class="lifetime" max="12000" value="0" aria-label="演示提示剩余时间" hidden></progress>
+        <p class="simulation-note">虚构数据 · 不代表实战建议</p>
+      </article>
+      <p id="window-note" class="window-note">小窗可移到投屏旁，收起后只保留状态。</p>
+    </section>
+
+    <section class="controls" aria-labelledby="controls-title">
+      <div class="controls-heading"><h2 id="controls-title">试播提示状态</h2><button id="play" class="play-button" type="button">播放一轮 <span aria-hidden="true">▶</span></button></div>
+      <p id="play-note" class="control-note" role="status">选择任一状态，也可观看一次自动变化。</p>
+      <div class="scenario-grid" role="group" aria-label="选择演示状态">
+        <button data-scenario="valid" type="button"><span class="sample-dot green"></span>有效提示</button>
+        <button data-scenario="expiring" type="button"><span class="sample-dot amber"></span>即将到期</button>
+        <button data-scenario="expired" type="button"><span class="sample-dot grey"></span>已失效</button>
+        <button data-scenario="unknown" type="button"><span class="sample-dot grey"></span>信息不足</button>
+        <button data-scenario="conflict" type="button"><span class="sample-dot amber"></span>信息冲突</button>
+        <button data-scenario="disconnected" type="button"><span class="sample-dot red"></span>模拟断连</button>
+        <button data-scenario="invalidated" class="wide-scenario" type="button">画面变化，撤下旧提示 <span aria-hidden="true">↻</span></button>
+      </div>
+      <p class="reading-note">到期或信息不可靠时，对象和动作会一起撤下。</p>
+    </section>
+    <footer class="page-footer">本机独立演示 · 未接入游戏或真实策略</footer>
+  </main>
+</body>
+</html>

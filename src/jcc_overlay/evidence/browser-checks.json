@@ -1,0 +1,259 @@
+[
+  {
+    "name": "compact-valid",
+    "state": "valid",
+    "target": "第 2 格 · 纸片小方",
+    "action": "可考虑保留",
+    "reason": "虚构条件：已有同名纸片，留作配对。",
+    "simulation": "模拟演示",
+    "countdown": "11.6 秒",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 212.4921875
+    },
+    "overflow": false,
+    "actionFont": "28px"
+  },
+  {
+    "name": "compact-expiring",
+    "state": "expiring",
+    "target": "第 2 格 · 纸片小方",
+    "action": "可考虑保留",
+    "reason": "虚构条件：已有同名纸片，留作配对。",
+    "simulation": "模拟演示",
+    "countdown": "2.3 秒",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 212.4921875
+    },
+    "overflow": false,
+    "actionFont": "28px"
+  },
+  {
+    "name": "compact-expired",
+    "state": "expired",
+    "target": "",
+    "action": "提示已到期",
+    "reason": "旧提示已撤下，等待新的演示提示。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "23px"
+  },
+  {
+    "name": "unknown",
+    "state": "unknown",
+    "target": "",
+    "action": "信息不足，暂不建议",
+    "reason": "等待新的演示信息。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "23px"
+  },
+  {
+    "name": "conflict",
+    "state": "conflict",
+    "target": "",
+    "action": "信息不一致，暂不建议",
+    "reason": "两份演示信息不一致，旧提示已撤下。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "23px"
+  },
+  {
+    "name": "disconnected",
+    "state": "disconnected",
+    "target": "",
+    "action": "连接中断，提示已撤下",
+    "reason": "收到新的演示提示后再显示。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "23px"
+  },
+  {
+    "name": "invalidated",
+    "state": "invalidated",
+    "target": "",
+    "action": "画面变化，提示已撤下",
+    "reason": "演示内容已变化，需要重新判断。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 460,
+    "height": 270,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 444,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "23px"
+  },
+  {
+    "name": "small-360x240",
+    "state": "valid",
+    "target": "第 2 格 · 纸片小方",
+    "action": "可考虑保留",
+    "reason": "虚构条件：已有同名纸片，留作配对。",
+    "simulation": "模拟演示",
+    "countdown": "11.7 秒",
+    "width": 360,
+    "height": 240,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 344,
+      "height": 211.09375
+    },
+    "overflow": false,
+    "actionFont": "27px"
+  },
+  {
+    "name": "collapsed",
+    "height": 79,
+    "expanded": "false",
+    "contentVisible": false
+  },
+  {
+    "name": "fetch-failure",
+    "state": "disconnected",
+    "target": "",
+    "action": "连接中断，提示已撤下",
+    "reason": "收到新的演示提示后再显示。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 360,
+    "height": 240,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 344,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "21px"
+  },
+  {
+    "name": "same-revision-after-reconnect",
+    "state": "disconnected",
+    "target": "",
+    "action": "连接中断，提示已撤下",
+    "reason": "收到新的演示提示后再显示。",
+    "simulation": "模拟演示",
+    "countdown": "",
+    "width": 360,
+    "height": 240,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 344,
+      "height": 186
+    },
+    "overflow": false,
+    "actionFont": "21px"
+  },
+  {
+    "name": "fresh-revision-after-reconnect",
+    "state": "valid",
+    "target": "第 2 格 · 纸片小方",
+    "action": "可考虑保留",
+    "reason": "虚构条件：已有同名纸片，留作配对。",
+    "simulation": "模拟演示",
+    "countdown": "11.7 秒",
+    "width": 360,
+    "height": 240,
+    "card": {
+      "x": 8,
+      "y": 8,
+      "width": 344,
+      "height": 211.09375
+    },
+    "overflow": false,
+    "actionFont": "27px"
+  },
+  {
+    "name": "real-browser-one-pass-sequence",
+    "states": [
+      {
+        "state": "valid",
+        "target": "第 2 格 · 纸片小方",
+        "action": "可考虑保留"
+      },
+      {
+        "state": "expiring",
+        "target": "第 2 格 · 纸片小方",
+        "action": "可考虑保留"
+      },
+      {
+        "state": "expired",
+        "target": "",
+        "action": "提示已到期"
+      },
+      {
+        "state": "unknown",
+        "target": "",
+        "action": "信息不足，暂不建议"
+      },
+      {
+        "state": "conflict",
+        "target": "",
+        "action": "信息不一致，暂不建议"
+      },
+      {
+        "state": "disconnected",
+        "target": "",
+        "action": "连接中断，提示已撤下"
+      }
+    ]
+  },
+  {
+    "name": "real-server-stop",
+    "state": "disconnected",
+    "target": "",
+    "action": "连接中断，提示已撤下",
+    "simulation": "模拟演示"
+  }
+]
