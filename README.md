@@ -10,7 +10,7 @@
 - 使用 macOS 的 Apple Vision 进行本地中文文字识别；保留与 Sunflower 读取接口兼容的适配代码，当前连续观察直接调用本机 OCR。
 - 使用 jcc-replay-analyst 的画面变化检测模块处理实际画面。游戏内各区域还没有针对设备和版本完成校准。
 - 持续接收并优先处理最新画面，记录时间与丢帧；局面格式和候选资料库已提供独立校验和查询接口，还未接入真实对局决策。
-- 提供私有图片导入、标注与离线测评工具，以及可选的画面连续性联调；实战画面标注和字段准确率仍待验证。
+- 提供私有图片导入、标注与离线测评工具，以及可选的画面连续性联调和局部数字识别实验；实战画面标注和字段准确率仍待验证。
 - 提供阵容、买卖和装备共用的策略规则骨架；默认没有实战规则，示例仅用于合成局面测试。
 - 画面仅在本机处理，当前观察命令不保存游戏截图。输出是识别数量和测速信息，不包含识别到的文字。
 
@@ -41,7 +41,7 @@ cp 设备配置.env.example 设备配置.env
 
 `tools/jcc-observe` 只读画面并输出 JSON 测试结果；它不会自动启动游戏、触摸屏幕或匹配。设备配置文件、截图、版本数据、模型和依赖目录不会提交到仓库。
 
-局面字段见[局面规范](docs/specs/game-state-v1.md)，候选资料及来源见[资料库规范](docs/specs/catalog-v1.md)和[证据规范](docs/specs/catalog-evidence-v1.md)，取帧与识别见[视觉流规范](docs/specs/vision-stream-v1.md)、[连续性规范](docs/specs/vision-stability-v1.md)和[联调说明](docs/specs/vision-integration-v1.md)，样本、评测和策略见[样本工作流](docs/specs/sample-workflow-v1.md)、[离线测评](docs/specs/evaluation-v1.md)和[策略规范](docs/specs/strategy-v1.md)。这些模块仍需接入并使用真实对局样本验证。
+局面字段见[局面规范](docs/specs/game-state-v1.md)，候选资料及来源见[资料库规范](docs/specs/catalog-v1.md)和[证据规范](docs/specs/catalog-evidence-v1.md)，取帧与识别见[视觉流规范](docs/specs/vision-stream-v1.md)、[连续性规范](docs/specs/vision-stability-v1.md)、[联调说明](docs/specs/vision-integration-v1.md)和[局部数字识别实验](docs/specs/roi-recognition-v1.md)，样本、评测和策略见[样本工作流](docs/specs/sample-workflow-v1.md)、[离线测评](docs/specs/evaluation-v1.md)和[策略规范](docs/specs/strategy-v1.md)。这些模块仍需接入并使用真实对局样本验证。
 
 ## 可选：本地视觉模型实验
 
