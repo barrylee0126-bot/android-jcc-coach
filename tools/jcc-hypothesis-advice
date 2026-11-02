@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+export PYTHONPATH="$project_dir/src${PYTHONPATH:+:$PYTHONPATH}"
+if [ -x "$project_dir/.venv/bin/python" ]; then
+    exec "$project_dir/.venv/bin/python" -B -m jcc_hypothesis_advice "$@"
+fi
+exec python3 -B -m jcc_hypothesis_advice "$@"
