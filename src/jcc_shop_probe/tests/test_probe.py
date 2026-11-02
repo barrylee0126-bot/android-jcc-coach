@@ -7,9 +7,10 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from jcc_shop_probe import LexiconEntry, Rect, ShopLayout, SlotLayout, probe_shop
+from jcc_shop_probe import (ExperimentalPriceProcessing, LexiconEntry, Rect, ShopLayout,
+                            SlotLayout, probe_shop)
 from jcc_shop_probe.private_cli import _external
 
 
@@ -33,6 +34,17 @@ def image(color=(80, 70, 60), size=(520, 110), orientation=None):
         exif[274] = orientation
         im.save(out, format="PNG", exif=exif)
     return out.getvalue()
+
+
+def image_with_gold():
+    im = Image.new("RGB", (520, 110), (80, 70, 60))
+    draw = ImageDraw.Draw(im)
+    for x in range(0, 520, 104):
+        draw.rectangle((x + 71, 79, x + 73, 85), fill=(220, 190, 40))
+        draw.rectangle((x + 20, 20, x + 24, 24), fill=(220, 190, 40))
+    output = io.BytesIO()
+    im.save(output, format="PNG")
+    return output.getvalue()
 
 
 def box(text, scale, *, kind="name", confidence=1.0):
@@ -235,6 +247,67 @@ class ShopProbeTests(unittest.TestCase):
         project = Path(__file__).resolve().parents[3]
         with self.assertRaises(ValueError):
             _external(project / "would-be-private.json", project)
+
+    def test_experimental_processing_changes_only_price_images_and_records_evidence(self):
+        class RecordingOCR(FakeOCR):
+            def __init__(self):
+                super().__init__()
+                self.images = []
+
+            def recognize(self, data):
+                self.images.append(data)
+                return super().recognize(data)
+
+        source = image_with_gold()
+        unmasked, masked = RecordingOCR(), RecordingOCR()
+        plain = probe_shop(source, layout=layout(), lexicon=VOCAB, ocr=unmasked,
+                           price_processing=ExperimentalPriceProcessing(5, suppress_gold=False))
+        result = probe_shop(source, layout=layout(), lexicon=VOCAB, ocr=masked,
+                            price_processing=ExperimentalPriceProcessing(5))
+        self.assertEqual(plain.frame_ref, result.frame_ref)
+        self.assertTrue(result.summary()["experimental_price_processing"])
+        self.assertEqual(result.ocr_requests, 20)
+        for index in range(0, 20, 2):
+            self.assertEqual(unmasked.images[index], masked.images[index])
+            self.assertNotEqual(unmasked.images[index + 1], masked.images[index + 1])
+        first_price = result.private_details()["private_diagnostics"]["slots"][0]["ocr"][1]["price_processing"]
+        self.assertGreater(first_price["mask"]["changed_pixels"], 0)
+        self.assertNotEqual(first_price["source_crop_sha256"], first_price["ocr_input_sha256"])
+        self.assertFalse(result.summary()["actionable"])
+
+    def test_experimental_price_does_not_promote_missing_or_edge_results(self):
+        for kind in ("missing", "edge"):
+            with self.subTest(kind=kind):
+                responses = script()
+                if kind == "missing":
+                    responses[3] = []
+                else:
+                    responses[1][0]["x"] = 0
+                result = probe_shop(image_with_gold(), layout=layout(), lexicon=VOCAB,
+                                    ocr=FakeOCR(responses),
+                                    price_processing=ExperimentalPriceProcessing(5))
+                self.assertEqual(result.slots[0].price.status, "unknown")
+                self.assertEqual(result.slots[0].status, "unknown")
+
+    def test_experimental_missing_gold_and_unsafe_crop_fail_closed(self):
+        class EmptyOCR:
+            def __init__(self):
+                self.calls = 0
+
+            def recognize(self, data):
+                self.calls += 1
+                return []
+
+        backend = EmptyOCR()
+        result = probe_shop(image(), layout=layout(), lexicon=VOCAB, ocr=backend,
+                            price_processing=ExperimentalPriceProcessing(5))
+        self.assertEqual(backend.calls, 10)
+        self.assertEqual(result.ocr_requests, 10)
+        self.assertTrue(all(slot.price.status == "unknown" for slot in result.slots))
+        self.assertTrue(all("price_mask_no_gold_pixels" in slot.price.reasons for slot in result.slots))
+        with self.assertRaises(ValueError):
+            probe_shop(image_with_gold(), layout=layout(), lexicon=VOCAB, ocr=backend,
+                       price_processing=ExperimentalPriceProcessing(11))
 
 
 if __name__ == "__main__":

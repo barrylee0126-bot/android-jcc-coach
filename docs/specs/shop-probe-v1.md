@@ -26,6 +26,14 @@ anonymous_result = result.summary()
 
 `ShopProbeResult.slots` 总是按 1–5 返回。每格含 `name`、`price` 两个 `FieldCandidate`，其 `candidates` 保留单倍率提议，`variants` 保留每个倍率的候选、满足阈值的候选和原因。名称候选为词典 key，`name_options` 提供 key 和显示名称。`status=candidate` 只表示探针规则通过，所有格始终 `identity_verified=False`、`visibility=unverified`、`font_legibility=unverified`。
 
+## 可选价格处理实验
+
+默认不处理价格图。需要离线研究时，可显式传入 `price_processing=ExperimentalPriceProcessing(left_padding_px=private_padding, suppress_gold=True)`；私有命令行配置可选 `experimental_price_processing` 对象，包含整数 `left_padding_px` 和布尔值 `suppress_gold`。省略或设为 null 沿用原路径。扩框按原图像素向左增加，必须始终在对应卡片内且不能和名称区相交，否则在 OCR 前报错；不更改卡片、名称或其他位置。不同画面须单独标定，不能照搬私有帧的参数。
+
+`suppress_gold=True` 在每个倍率的费用图中，把左侧 56% 内符合 `R>=95、G>=75、R>=0.92G、B<0.70G、B<0.70R` 的像素替换为该裁图暗像素的各通道中位数，暗像素定义为各通道均小于 90；颜色处理不移动像素坐标。找不到暗背景或满足颜色条件的像素时，该倍率直接保持未知，不发 OCR。参数是有限开发试验，不是通用金币检测器。
+
+启用时，私有诊断记录实际裁框、原始缩放裁图和送 OCR 图片的 SHA-256、掩码面积／边界、背景及每倍率原始输出；这些信息可能泄露画面，应留在私有目录。匿名摘要只标记 `experimental_price_processing=true`，不会放入坐标与 OCR 原文。每倍率的置信度、贴边、格式、分歧等原门控仍生效；费用与名称仍绑定同一输入摘要。**颜色替换可能损伤数字，候选不是真值，不能直接用于购买或其他自动操作。**
+
 ## 同帧关联与来源
 
 `source_sha256` 是传入原图的完整编码字节 SHA-256；`frame_ref` 为 `sha256:` 加同一个完整摘要。匿名摘要不包含账户、路径或样本编号。总控与其他离线演示集成时应比较完整 `source_sha256`，不能只比较显示顺序、回合、文件名或摘要前缀。

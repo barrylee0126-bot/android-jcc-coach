@@ -155,6 +155,22 @@ class PrivateCLITests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o700)
         self.assertTrue(all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in output.iterdir()))
 
+    def test_explicit_price_processing_is_recorded_and_missing_gold_stays_unknown(self):
+        config, _, _ = fixture(self.root)
+        cfg = json.loads(config.read_text())
+        cfg["experimental_price_processing"] = {"left_padding_px": 5, "suppress_gold": True}
+        config.write_text(json.dumps(cfg))
+        output = self.root / "experimental-output"
+        with patch("jcc_device.vision_ocr.VisionOCR", BlankOCR), contextlib.redirect_stdout(io.StringIO()):
+            run_private(config, output)
+        result = json.loads((output / "results.private.json").read_text())
+        self.assertTrue(result["summary"]["experimental_price_processing"])
+        self.assertTrue(result["frames"][0]["experimental_price_processing"])
+        for slot in result["frames"][0]["slots"]:
+            self.assertEqual(slot["price"]["status"], "unknown")
+            self.assertIn("price_mask_no_gold_pixels", slot["price"]["reasons"])
+        self.assertIn("试验性价格区域处理：已启用", (output / "查看四帧五格.html").read_text())
+
     def test_viewer_embeds_verified_bytes_despite_source_replacement_and_symlink(self):
         output, files, pixels = self.run_fixture()
         page = output / "查看四帧五格.html"

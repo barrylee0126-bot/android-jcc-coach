@@ -10,6 +10,7 @@ import hashlib
 import io
 import math
 import re
+import statistics
 import time
 import unicodedata
 from dataclasses import asdict, dataclass, field
@@ -114,6 +115,23 @@ class LexiconEntry:
 
 
 @dataclass(frozen=True)
+class ExperimentalPriceProcessing:
+    """Explicit opt-in: expand a price crop and optionally suppress gold pixels.
+
+    Colour suppression changes input pixels and may damage the price glyph.
+    It is an offline experiment, not an identity or purchase decision.
+    """
+    left_padding_px: int
+    suppress_gold: bool = True
+
+    def __post_init__(self):
+        if type(self.left_padding_px) is not int or not 0 <= self.left_padding_px <= 256:
+            raise ValueError("Price left padding must be an integer in 0..256")
+        if type(self.suppress_gold) is not bool:
+            raise ValueError("suppress_gold must be a boolean")
+
+
+@dataclass(frozen=True)
 class FieldCandidate:
     status: str
     candidates: tuple[Any, ...]
@@ -148,6 +166,7 @@ class ShopProbeResult:
     ocr_requests: int
     issues: tuple[str, ...] = ()
     _private: dict = field(default_factory=dict, repr=False, compare=False)
+    experimental_price_processing: bool = False
 
     def summary(self) -> dict:
         """Anonymous byte reference + candidates; no paths, ROIs or OCR text."""
@@ -160,6 +179,7 @@ class ShopProbeResult:
             "issues": list(self.issues), "accuracy": None,
             "human_annotations": 0, "independent_reviews": 0,
             "device_capture_time": None, "actionable": False,
+            "experimental_price_processing": self.experimental_price_processing,
         }
 
     def private_details(self) -> dict:
@@ -259,9 +279,43 @@ def _vote(raw: list[dict], *, scale: int, crop: Rect, zone: Rect,
             "eligible": tuple(sorted(eligible, key=str)), "reasons": tuple(sorted(reasons))}
 
 
+def _suppress_gold(region: Image.Image) -> tuple[Image.Image, dict, str | None]:
+    """Replace gold-coloured pixels without changing crop coordinates.
+
+    This is intentionally fixed and auditable, not a general coin detector.
+    Reject a missing dark background or missing gold rather than promoting OCR.
+    """
+    width, height = region.size
+    getter = getattr(region, "get_flattened_data", region.getdata)
+    pixels = list(getter())
+    dark = [pixel for pixel in pixels if max(pixel) < 90]
+    metadata = {"algorithm": "gold-pixel-mask-v1", "size": [width, height],
+                "changed_pixels": 0, "mask_bbox": None, "background_rgb": None}
+    if not dark:
+        return region, metadata, "price_mask_no_dark_background"
+    background = tuple(int(statistics.median(p[channel] for p in dark)) for channel in range(3))
+    changed = []
+    for index, (red, green, blue) in enumerate(pixels):
+        x = index % width
+        if (x < width * .56 and red >= 95 and green >= 75 and red >= green * .92
+                and blue < green * .70 and blue < red * .70):
+            pixels[index] = background
+            changed.append((x, index // width))
+    metadata["background_rgb"] = background
+    if not changed:
+        return region, metadata, "price_mask_no_gold_pixels"
+    metadata["changed_pixels"] = len(changed)
+    metadata["mask_bbox"] = [min(p[0] for p in changed), min(p[1] for p in changed),
+                             max(p[0] for p in changed) + 1, max(p[1] for p in changed) + 1]
+    output = region.copy()
+    output.putdata(pixels)
+    return output, metadata, None
+
+
 def probe_shop(image_bytes: bytes, *, layout: ShopLayout,
                lexicon: Sequence[LexiconEntry], ocr: OCR,
-               expected_sha256: str | None = None) -> ShopProbeResult:
+               expected_sha256: str | None = None,
+               price_processing: ExperimentalPriceProcessing | None = None) -> ShopProbeResult:
     """Read an image once, bind its exact bytes, and always return slots 1..5.
 
     Bad image/hash/geometry returns five unknowns and performs zero OCR. Layout
@@ -271,12 +325,22 @@ def probe_shop(image_bytes: bytes, *, layout: ShopLayout,
     started = time.perf_counter_ns()
     digest = hashlib.sha256(image_bytes).hexdigest()
     frame_ref = "sha256:" + digest
-    calls, size, private = 0, None, {"slots": [], "layout": asdict(layout)}
+    if price_processing is not None and not isinstance(price_processing, ExperimentalPriceProcessing):
+        raise TypeError("price_processing must be ExperimentalPriceProcessing or None")
+    price_rects = []
+    for slot in layout.slots:
+        x, y, right, bottom = slot.price.box
+        crop = Rect((x - (price_processing.left_padding_px if price_processing else 0), y, right, bottom))
+        if not slot.card.contains(crop) or crop.intersects(slot.name_zone):
+            raise ValueError("Experimental price crop must remain inside the card and outside the name zone")
+        price_rects.append(crop)
+    calls, size, private = 0, None, {"slots": [], "layout": asdict(layout),
+                                    "price_processing": None if price_processing is None else asdict(price_processing)}
 
     def finish(slots, issues=()):
         return ShopProbeResult(frame_ref, size, layout.layout_id, tuple(slots),
                                (time.perf_counter_ns() - started) / 1e6, calls,
-                               tuple(issues), private)
+                               tuple(issues), private, price_processing is not None)
 
     if expected_sha256 is not None and digest != expected_sha256:
         return finish([_unknown(i, "source_hash_mismatch") for i in range(1, 6)],
@@ -307,24 +371,40 @@ def probe_shop(image_bytes: bytes, *, layout: ShopLayout,
         return finish([_unknown(i, reason) for i in range(1, 6)], (reason,))
 
     slots = []
-    for slot in layout.slots:
+    for slot, price_crop in zip(layout.slots, price_rects):
         name_votes, price_votes, body_text, details = [], [], [], []
         for scale in layout.scales:
-            for kind, crop in (("card", slot.card), ("price", slot.price)):
+            for kind, crop in (("card", slot.card), ("price", price_crop)):
                 region = decoded.crop(crop.box)
                 region = region.resize((region.width * scale, region.height * scale), Image.Resampling.LANCZOS)
+                error = None
+                processing = None
+                if kind == "price" and price_processing is not None:
+                    original = io.BytesIO()
+                    region.save(original, format="PNG")
+                    processing = {"crop": crop.box, "source_crop_sha256": hashlib.sha256(original.getvalue()).hexdigest(),
+                                  "suppress_gold": price_processing.suppress_gold}
+                    if price_processing.suppress_gold:
+                        region, mask, error = _suppress_gold(region)
+                        processing["mask"] = mask
                 data = io.BytesIO()
                 region.save(data, format="PNG")
-                error = None
+                if processing is not None:
+                    processing["ocr_input_sha256"] = hashlib.sha256(data.getvalue()).hexdigest()
                 t = time.perf_counter_ns()
-                calls += 1
-                try:
-                    raw = _boxes(ocr.recognize(data.getvalue()), region.size)
-                except (RuntimeError, OSError, ValueError, TimeoutError) as exc:
-                    raw = []
-                    error = "invalid_ocr_response" if str(exc) == "invalid_ocr_response" else "ocr_error"
-                details.append({"kind": kind, "scale": scale, "raw": raw,
-                                "error": error, "elapsed_ms": (time.perf_counter_ns() - t) / 1e6})
+                raw = []
+                if error is None:
+                    calls += 1
+                    try:
+                        raw = _boxes(ocr.recognize(data.getvalue()), region.size)
+                    except (RuntimeError, OSError, ValueError, TimeoutError) as exc:
+                        raw = []
+                        error = "invalid_ocr_response" if str(exc) == "invalid_ocr_response" else "ocr_error"
+                detail = {"kind": kind, "scale": scale, "raw": raw,
+                          "error": error, "elapsed_ms": (time.perf_counter_ns() - t) / 1e6}
+                if processing is not None:
+                    detail["price_processing"] = processing
+                details.append(detail)
                 if kind == "card":
                     name_votes.append(_vote(raw, scale=scale, crop=crop, zone=slot.name_zone,
                                             lexicon=lookup, min_confidence=layout.min_confidence, error=error))
@@ -366,7 +446,7 @@ def probe_shop(image_bytes: bytes, *, layout: ShopLayout,
             status = "candidate"
         else:
             status = "unknown"
-        if not all_blank and any(d["error"] for d in details):
+        if not all_blank and any(d["error"] in ("invalid_ocr_response", "ocr_error") for d in details):
             reasons.add("ocr_failure")
         if status in ("unknown", "conflict"):
             reasons.update(name.reasons + price.reasons)

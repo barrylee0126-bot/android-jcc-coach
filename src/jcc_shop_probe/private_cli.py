@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .probe import LexiconEntry, Rect, ShopLayout, probe_shop, SlotLayout
+from .probe import ExperimentalPriceProcessing, LexiconEntry, Rect, ShopLayout, probe_shop, SlotLayout
 
 
 def _read_pinned(path: Path, digest: str) -> bytes:
@@ -131,6 +131,7 @@ def _viewer(results: list[dict], summary: dict, images: dict[str, bytes]) -> str
             "<h1>商店五格开发探针</h1><p>本机私有 · 已见历史开发画面 · 机器候选／未知。"
             "词典匹配不证明真实身份；empty_candidate 只是空槽线索，occluded_candidate 是覆盖线索。"
             "不代表人工标注、独立复核或准确率，不产生买卖操作。</p>"
+            f"<p>试验性价格区域处理：{'已启用；颜色替换如启用可能损伤数字' if summary.get('experimental_price_processing') else '未启用'}。</p>"
             f"<p>四类状态与本轮计数：{escape(summary['status_counts'])}；"
             f"逐帧处理毫秒：{escape(summary['processing_ms_per_frame'])}</p>" + "".join(sections) + "</html>\n")
 
@@ -193,13 +194,18 @@ def run_private(config_path: Path, output: Path) -> dict:
         empty_std_max=l.get("empty_std_max", 8), empty_mean_max=l.get("empty_mean_max", 40),
         occlusion_terms=tuple(l.get("occlusion_terms", [])),
     )
+    raw_processing = cfg.get("experimental_price_processing")
+    if raw_processing is not None and not isinstance(raw_processing, dict):
+        raise ValueError("experimental_price_processing must be an object")
+    price_processing = (None if raw_processing is None else
+                        ExperimentalPriceProcessing(**raw_processing))
     from jcc_device.vision_ocr import VisionOCR
 
     results, names = [], {e.key: e.name for e in vocabulary}
     with VisionOCR(timeout=cfg.get("ocr_request_timeout_seconds", 10)) as backend:
         for path, data, sample, asset in source_inputs:
             result = probe_shop(data, layout=layout, lexicon=vocabulary, ocr=backend,
-                                expected_sha256=asset["sha256"])
+                                expected_sha256=asset["sha256"], price_processing=price_processing)
             details = result.private_details()
             # Exact private binding, available for other offline demos to join.
             details["source_sha256"] = asset["sha256"]
@@ -240,7 +246,7 @@ def run_private(config_path: Path, output: Path) -> dict:
         "processing_ms_per_frame": [r["elapsed_ms"] for r in results],
         "sample_inputs_unchanged": True, "accuracy": None, "human_annotations": 0,
         "independent_reviews": 0, "acceptance_samples": 0, "actionable": False,
-        "candidate_only": True,
+        "candidate_only": True, "experimental_price_processing": price_processing is not None,
     }
     image_bytes = {asset["sha256"]: data for _, data, _, asset in source_inputs}
     payloads = {
