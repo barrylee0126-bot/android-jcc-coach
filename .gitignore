@@ -16,6 +16,8 @@
 !/tools/adb
 !/tools/scrcpy
 !/tools/jcc-observe
+!/tools/jcc-scene
+!/tools/jcc-decision-demo
 !/tools/setup-macos
 
 # Local configuration, third-party checkouts, models, captures and environments
