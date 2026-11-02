@@ -20,6 +20,7 @@ from jcc_replay_demo.inspector import (
     load_source, run_inspection, safe_summary, structured_frame, verify_unchanged, attach_shop,
 )
 from jcc_replay_demo.render import CSP, render_page
+from jcc_replay_demo.gold import check_gold_glyph
 from jcc_replay_demo.integrations import CAPACITY_REVISION, economy_comparison, match_capacity, unknown_capacity
 from jcc_replay_demo.shop import match_shop
 
@@ -166,6 +167,9 @@ class InspectorTests(unittest.TestCase):
             for probe in variant["fields"]:
                 if probe["field"] == "gold":
                     probe.update(status="development_candidate", candidate=31, reason=None)
+        gold_roi = next(p["input_region"] for p in frame["fields"] if p["field"] == "gold")
+        frame["gold_glyph_check"] = check_gold_glyph(
+            self.image, roi=gold_roi, frame_ref=frame["frame_ref"], proposed_value=31)
         economy = economy_comparison(frame)
         self.assertEqual(economy["input_frame_ref"], frame["frame_ref"])
         self.assertEqual(economy["input_source_sha256"], digest(self.image))
@@ -177,6 +181,8 @@ class InspectorTests(unittest.TestCase):
         self.assertFalse(economy["input_mapping"]["semantic_gate_upgraded"])
         for group in (frame["fields"], *(v["fields"] for v in frame["variants"])):
             next(p for p in group if p["field"] == "gold")["candidate"] = 1
+        frame["gold_glyph_check"] = check_gold_glyph(
+            self.image, roi=gold_roi, frame_ref=frame["frame_ref"], proposed_value=1)
         frame["economy"] = economy_comparison(frame)
         rows = frame["economy"]["result"]["comparisons"]
         self.assertEqual([r["status"] for r in rows], ["conditional"] + ["insufficient_candidate_gold"] * 4)

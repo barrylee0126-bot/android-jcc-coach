@@ -5,6 +5,7 @@ import re
 import time
 
 from jcc_economy_lab import GoldCandidate, HypotheticalPrice, analyze_purchases, ten_gold_five_cap_hypothesis
+from .gold import glyph_check_allows
 
 
 CAPACITY_REVISION = "roi-bound-sanitized-variants-v2"
@@ -25,7 +26,8 @@ def economy_comparison(frame: dict) -> dict:
              and probe is not None and probe.get("status") == "development_candidate"
              and probe.get("reason") is None and not conflict and len(variants) == 2
              and all(p.get("status") == "development_candidate" and p.get("reason") is None
-                     and p.get("candidate") == probe.get("candidate") for p in variants))
+                     and p.get("candidate") == probe.get("candidate") for p in variants)
+             and glyph_check_allows(frame, probe.get("candidate"), probe.get("input_region")))
     status = "candidate" if valid else "conflict" if conflict else "unknown"
     gold = GoldCandidate(probe.get("candidate") if valid else None, "replay_candidate",
                          frame["frame_ref"] + "/gold", status=status)

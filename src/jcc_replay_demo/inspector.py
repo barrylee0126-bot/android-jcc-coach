@@ -6,7 +6,7 @@ Real layouts and sample identities belong in an external private profile.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -31,6 +31,7 @@ from jcc_device.scene_evidence import (
 )
 
 from . import VERSION
+from .gold import check_gold_glyph, structured_gold_check
 
 
 PROJECT = Path(__file__).resolve().parents[2]
@@ -379,9 +380,21 @@ def inspect_image(image: SourceImage, profile: Profile, backend) -> dict:
         raise InspectorError("internal_binding_mismatch")
     reconcile_start = time.perf_counter()
     combined = reconcile_variants(tuple(v.experiment for v in variants))
+    reconcile_ms = (time.perf_counter() - reconcile_start) * 1000
+    frame_ref = "replay-" + hmac.new(profile.reference_key, image.data, hashlib.sha256).hexdigest()[:24]
+    glyph_start = time.perf_counter()
+    gold = next(p for p in combined.probes if p.field_name == "gold")
+    gold_roi = next(p.roi.box for p in profile.number_layouts[0].fields if p.field_name == "gold")
+    gold_check = check_gold_glyph(image.data, roi=gold_roi, frame_ref=frame_ref,
+                                 proposed_value=gold.candidate_value if gold.status == CANDIDATE else None)
+    if gold.status == CANDIDATE and gold_check["status"] == "unknown":
+        combined = replace(combined, probes=tuple(
+            replace(p, status="unknown", candidate_value=None, reason=gold_check["reason"],
+                    text_region=None, raw_score=None) if p.field_name == "gold" else p
+            for p in combined.probes))
+    glyph_ms = (time.perf_counter() - glyph_start) * 1000
     numbers = BoundNumbers(variants[0].binding, combined, variants[0].started_monotonic_ns,
                            variants[-1].completed_monotonic_ns)
-    reconcile_ms = (time.perf_counter() - reconcile_start) * 1000
     gate_start = time.perf_counter()
     decisions = assess_fields(scene, numbers, current=scene.binding,
                              now=ClockReading(clock, time.monotonic_ns()),
@@ -389,13 +402,14 @@ def inspect_image(image: SourceImage, profile: Profile, backend) -> dict:
     gate_ms = (time.perf_counter() - gate_start) * 1000
     result = {
         "order": image.order,
-        "frame_ref": "replay-" + hmac.new(profile.reference_key, image.data, hashlib.sha256).hexdigest()[:24],
+        "frame_ref": frame_ref,
         "source_sha256": digest(image.data),
         "sample_kind": "replay", "capture_kind": "screenshot",
         "evidence": "development_candidate_only_not_human_reviewed",
         "source_time": "historical_capture_time_unknown",
         "subject": "unknown", "visibility": "unknown", "mode": "unknown", "game_version": "unknown",
         "scene": scene.summary(), "fields": [_probe_dict(p) for p in combined.probes],
+        "gold_glyph_check": gold_check,
         "variants": [{"scale": v.experiment.layout.fields[0].scale,
                       "fields": [_probe_dict(p) for p in v.experiment.probes],
                       "processing_ms": (v.completed_monotonic_ns - v.started_monotonic_ns) / 1e6}
@@ -407,7 +421,7 @@ def inspect_image(image: SourceImage, profile: Profile, backend) -> dict:
                       "scene": (scene.completed_monotonic_ns - scene.started_monotonic_ns) / 1e6,
                       "numeric_variants": [(v.completed_monotonic_ns - v.started_monotonic_ns) / 1e6
                                            for v in variants],
-                      "reconcile": reconcile_ms, "semantic_gate": gate_ms,
+                      "reconcile": reconcile_ms, "gold_glyph_check": glyph_ms, "semantic_gate": gate_ms,
                       "offline_recognition_wall": (time.perf_counter() - started) * 1000},
     }
     comparison_start = time.perf_counter()
@@ -445,6 +459,7 @@ def structured_frame(frame: dict) -> dict:
             "semantic_gate": {p["field"]: {k: p[k] for k in ("status", "candidate", "reason")}
                               for p in frame["semantic_gate"]},
             "timing_ms": dict(frame["timing_ms"]),
+            "gold_glyph_check": structured_gold_check(frame["gold_glyph_check"]),
             "economy": frame["economy"], "capacity": frame["capacity"], "shop": frame["shop"],
             "independently_reviewed": False, "recognized_count": 0,
             "advice_eligible": False, "accuracy": None}
@@ -460,6 +475,9 @@ def safe_summary(frames: list[dict]) -> dict:
             "numeric_candidates": sum(p["status"] == CANDIDATE for p in fields),
             "numeric_unknown": sum(p["status"] == "unknown" for p in fields),
             "variant_conflicts": sum(p["reason"] == "variant_disagreement" for p in fields),
+            "gold_glyph_required_frames": sum(f["gold_glyph_check"]["required"] for f in frames),
+            "gold_glyph_vetoed_frames": sum(f["gold_glyph_check"]["status"] == "unknown" for f in frames),
+            "gold_glyph_consistent_frames": sum(f["gold_glyph_check"]["status"] == "consistent" for f in frames),
             "semantic_unknown": sum(p["status"] == "unknown" for f in frames for p in f["semantic_gate"]),
             "recognized_count": 0, "real_acceptance_samples": 0, "accuracy": None,
             "device_actions": 0, "advice_count": 0,

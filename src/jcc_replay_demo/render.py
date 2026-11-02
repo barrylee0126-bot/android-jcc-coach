@@ -5,7 +5,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import io
 import json
+
+from PIL import Image
+
+from .gold import METHOD, THRESHOLDS, check_gold_glyph
+from .integrations import economy_comparison
 
 
 FIELD_NAMES = {"round": "回合", "hp": "血量", "gold": "金币", "level": "等级"}
@@ -27,6 +33,9 @@ REASONS = {
     "ocr_failed": "OCR 请求失败；异常原文未记录。",
     "unmatched_text": "文字未匹配显式线索规则。",
     "invalid_ocr_response": "OCR 返回格式异常。",
+    "gold_glyph_disagreement": "6/9 候选与本帧像素中的环孔位置相反；金币未知，阻断经济比较。",
+    "gold_glyph_inconclusive": "无法稳定提取并核对 6/9 字形；金币未知，阻断经济比较。",
+    "gold_roi_boundary_foreground": "金币输入框边界存在亮色像素，无法区分截断笔画与图标；金币未知，阻断经济比较。",
 }
 
 CSP = ("default-src 'none'; img-src data:; style-src 'unsafe-inline'; "
@@ -69,6 +78,9 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#0e1723; padding:
   border-radius:8px; color:#c9d5e6; font-size:12px; max-height:420px; overflow:auto; }
 code { overflow-wrap:anywhere; } .frame-head { display:flex; justify-content:space-between; gap:15px; flex-wrap:wrap; }
 footer { color:#9baabc; padding:4px 0 30px; font-size:13px; }
+.glyph-images { display:flex; flex-wrap:wrap; gap:12px; }
+.glyph-images figure { margin:0; } .glyph-images img { height:180px; width:auto; image-rendering:pixelated; }
+.glyph-images figcaption { color:#adb9ca; font-size:12px; }
 @media(max-width:1050px) { .frame-layout { grid-template-columns:1fr; } main { padding:18px; } }
 @media(max-width:550px) { .field-grid { grid-template-columns:1fr; } .panel { padding:15px; } h1 { font-size:25px; } }
 """
@@ -131,7 +143,7 @@ def _economy_html(frame: dict) -> str:
     economy = frame["economy"]
     analysis = economy["result"]
     heading = '<h3>金币条件比较 · 规则未绑定</h3>'
-    premise = ('<p class="muted small">仅把本帧非冲突金币语法候选映射为条件输入，未确认属于己方。'
+    premise = ('<p class="muted small">仅把本帧无冲突、且未被 6/9 字形检查否决的金币开发候选映射为条件输入，未确认属于己方。'
                '价格 1 / 2 / 3 / 4 / 5 为五个独立假设，未识别商店价格。'
                '10 金一档、每档 1 金、封顶 5 金采用历史假设；本局模式、版本、特殊效果及计息时点均未绑定。'
                '假定计息前除这次扣款外余额不变，不预测下轮总金币，不产生买卖建议或执行动作。</p>')
@@ -153,6 +165,45 @@ def _economy_html(frame: dict) -> str:
     return ('<section class="economy conditional">' + heading + premise +
             '<div class="table-wrap"><table><thead><tr><th>假设价格</th><th>假设扣款后余额</th><th>假设利息前→后</th><th>变化</th><th>状态</th></tr></thead>'
             '<tbody>' + ''.join(rows) + '</tbody></table></div></section>')
+
+
+def _gold_glyph_html(frame: dict, image) -> str:
+    check = frame["gold_glyph_check"]
+    if not check["required"]:
+        note = ("倍率缺失或冲突，未用字形覆盖原结果。" if check["status"] == "not_checked"
+                else "候选不含 6/9，未做环孔核对；仍仅为双倍率数字语法候选。")
+        return '<p class="muted small">金币字形检查：' + note + '</p>'
+    labels = {"upper": "上半部", "lower": "下半部", "unresolved": "未能判定"}
+    figures, rows = [], []
+    with Image.open(io.BytesIO(image.data)) as original, original.crop(check["input_roi"]) as crop:
+        for threshold in (None, *THRESHOLDS):
+            picture = crop.copy() if threshold is None else crop.convert("L").point(
+                lambda pixel: 255 if pixel >= threshold else 0)
+            with picture, io.BytesIO() as out:
+                picture.save(out, format="PNG")
+                data = base64.b64encode(out.getvalue()).decode("ascii")
+            caption = "同帧原始局部" if threshold is None else f"亮度分割 {threshold}"
+            figures.append(f'<figure><img src="data:image/png;base64,{data}" alt="金币{caption}" loading="lazy">'
+                           f'<figcaption>{caption}</figcaption></figure>')
+    for measurement in check["measurements"]:
+        glyphs = measurement["components"]
+        positions = ' / '.join(labels[g["loop_position"]] for g in glyphs) or "未提取到内部字形"
+        centers = ' / '.join(f'{h["center_y"]:.3f}' for g in glyphs for h in g["holes"]) or "无有效环孔"
+        rows.append(f'<tr><td>{measurement["threshold"]}</td><td>{esc(positions)}</td><td>{esc(centers)}</td>'
+                    f'<td>{measurement["boundary_foreground_pixels"]}</td></tr>')
+    outcome = ("边界未检出亮色像素且环孔位置与候选相容；仍是未经独立验收的开发候选。" if check["status"] == "consistent"
+               else reason_text(check["reason"]))
+    return ('<section class="gold-glyph"><h3>金币 6/9 字形核对 · 开发检查</h3>'
+            f'<p>{esc(outcome)}</p><div class="glyph-images">' + ''.join(figures) + '</div>'
+            '<div class="table-wrap"><table><thead><tr><th>分割亮度</th><th>环孔位置</th><th>环孔中心 / 字形高度</th>'
+            '<th>边界亮色像素</th></tr></thead>'
+            '<tbody>' + ''.join(rows) + '</tbody></table></div>'
+            '<p class="muted small">使用同一原图和金币输入框，直接测量连通字形中的环孔；不使用 OCR 分数或文字框。'
+            '四档分割是同一图像方法的稳定性检查，不能算四份独立真值。'
+            '任一档检出边界亮色像素即保守未知；无触边信号不证明数字完整。'
+            '检查只会保留或否决原候选，不会将 6 与 9 互相改写；原倍率冲突继续未知。</p>'
+            f'<details><summary>本帧字形证据与绑定 · {METHOD}</summary>'
+            f'<pre>{esc(json.dumps(check, ensure_ascii=False, indent=2))}</pre></details></section>')
 
 
 def _capacity_html(frame: dict) -> str:
@@ -190,7 +241,7 @@ def _shop_html(frame: dict) -> str:
             '费用只显示识别状态，不用参考价格补值，不参与本页金币假设计算，不产生任何自动操作。</p></section>')
 
 
-def _validate_render_bindings(frames, images) -> None:
+def _validate_render_bindings(frames, images, profile) -> None:
     """Last consumer check: reject missing, reordered, duplicate or crossed data."""
     if not frames or len(frames) != len(images):
         raise ValueError("replay_render_binding_mismatch")
@@ -205,11 +256,24 @@ def _validate_render_bindings(frames, images) -> None:
             raise ValueError("replay_render_binding_mismatch")
         hashes.add(source_hash)
         refs.add(reference)
-        for name in ("economy", "capacity", "shop"):
+        for name in ("economy", "capacity", "shop", "gold_glyph_check"):
             result = frame.get(name)
             if (not isinstance(result, dict) or result.get("input_source_sha256") != source_hash
                     or result.get("input_frame_ref") != reference):
                 raise ValueError("replay_render_binding_mismatch")
+        gold_roi = next(p.roi.box for p in profile.number_layouts[0].fields if p.field_name == "gold")
+        if frame["gold_glyph_check"].get("input_roi") != list(gold_roi):
+            raise ValueError("replay_render_binding_mismatch")
+        raw_gold = [p for v in frame["variants"] for p in v["fields"] if p["field"] == "gold"]
+        proposed = (raw_gold[0]["candidate"] if len(raw_gold) == 2
+                    and all(p["status"] == "development_candidate" and p["reason"] is None
+                            and type(p["candidate"]) is int
+                            and p["candidate"] == raw_gold[0]["candidate"] for p in raw_gold) else None)
+        expected = check_gold_glyph(image.data, roi=gold_roi, frame_ref=reference, proposed_value=proposed)
+        if frame["gold_glyph_check"] != expected:
+            raise ValueError("replay_render_gold_evidence_mismatch")
+        if frame["economy"] != economy_comparison(frame):
+            raise ValueError("replay_render_economy_mismatch")
         capacity = frame["capacity"]
         if (capacity.get("matched_source_sha256") not in (None, source_hash)
                 or capacity.get("status") == "development_candidate"
@@ -241,6 +305,7 @@ def _frame_html(frame: dict, image, profile) -> str:
     gate_reasons = ', '.join(dict.fromkeys(p["reason"] or "unknown" for p in frame["semantic_gate"]))
     timing = (f'场景 {ms["scene"]:.1f} ms；数字 1× {ms["numeric_variants"][0]:.1f} ms / '
               f'2× {ms["numeric_variants"][1]:.1f} ms；对照 {ms["reconcile"]:.2f} ms；'
+              f'金币字形 {ms["gold_glyph_check"]:.2f} ms；'
               f'门控 {ms["semantic_gate"]:.2f} ms。读取 {ms["asset_read"]:.1f} ms，'
               f'图像完整性检查 {ms["image_validation"]:.1f} ms。')
     return f'''<article class="panel replay-frame" id="frame-{frame['order']}">
@@ -260,6 +325,7 @@ def _frame_html(frame: dict, image, profile) -> str:
         {_capacity_html(frame)}
       </div></div>
       {_shop_html(frame)}
+      {_gold_glyph_html(frame, image)}
       {_economy_html(frame)}
       {_variant_table(frame)}
       <details><summary>场景线索与门控原因码</summary><pre>{esc(json.dumps({'scene': frame['scene'], 'semantic_gate': frame['semantic_gate']}, ensure_ascii=False, indent=2))}</pre></details>
@@ -270,7 +336,7 @@ def _frame_html(frame: dict, image, profile) -> str:
 def render_page(report: dict, images, profile) -> str:
     frames, summary = report["frames"], report["summary"]
     images = tuple(images)
-    _validate_render_bindings(frames, images)
+    _validate_render_bindings(frames, images, profile)
     rows = []
     for frame in frames:
         values = []
@@ -294,7 +360,7 @@ def render_page(report: dict, images, profile) -> str:
 <p class="small">仅供本机查看，原图与原始 OCR 留在私有文件；未启动浏览器服务，无需网络。请勿上传或分享此报告。</p></div>
 <div class="metrics"><div class="metric"><strong>{summary['frames']}</strong><span>历史开发画面</span></div>
 <div class="metric"><strong>{summary['scene_candidates']}</strong><span>场景开发候选</span></div>
-<div class="metric"><strong>{summary['numeric_candidates']}</strong><span>双倍率一致数字候选</span></div>
+<div class="metric"><strong>{summary['numeric_candidates']}</strong><span>数字开发候选</span></div>
 <div class="metric"><strong>{summary['variant_conflicts']}</strong><span>保留的数字冲突</span></div>
 <div class="metric"><strong>{summary['semantic_unknown']}</strong><span>正式语义仍未知</span></div></div>
 <section class="panel" id="overview"><h2>回放机器候选概览</h2><div class="table-wrap">
