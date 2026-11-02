@@ -14,6 +14,7 @@
 - 提供本机私有标注与复核界面，以及历史画面上场人数的离线候选识别；遮挡、冲突和缺少证据时保留未知，不控制平板。
 - 提供商店五格的离线名称与费用识别实验；名称是机器候选，费用识别不可靠时保持未知，尚未用于实战买卖。
 - 提供金币消费的条件比较：根据显式假设计算余额与利息变化，不判断该买哪枚棋子，也不认定假设适用于当前对局。
+- 提供历史回放离线检查，将同帧基础字段、上场容量、商店机器候选及假设下的金币比较放在私有页面；它不提供实时或已验证的对局建议，运行需要自行准备本机私有配置和素材。
 - 提供阵容、买卖和装备共用的策略规则骨架；默认没有实战规则，示例仅用于合成局面测试。
 - 提供本机浏览器短提示原型，用虚构数据演示提示显示、过期和撤回；尚未接入游戏、识别或策略。
 - 画面仅在本机处理，当前观察命令不保存游戏截图。输出是识别数量和测速信息，不包含识别到的文字。
@@ -47,7 +48,7 @@ cp 设备配置.env.example 设备配置.env
 
 局面字段见[局面规范](docs/specs/game-state-v1.md)，候选资料及来源见[资料库规范](docs/specs/catalog-v1.md)和[证据规范](docs/specs/catalog-evidence-v1.md)，取帧与识别见[视觉流规范](docs/specs/vision-stream-v1.md)、[连续性规范](docs/specs/vision-stability-v1.md)、[联调说明](docs/specs/vision-integration-v1.md)、[局部数字识别实验](docs/specs/roi-recognition-v1.md)和[场景证据实验](docs/specs/scene-evidence-v1.md)，样本、评测和策略见[样本工作流](docs/specs/sample-workflow-v1.md)、[近似画面候选检查](docs/specs/near-duplicate-review-v1.md)、[离线测评](docs/specs/evaluation-v1.md)和[策略规范](docs/specs/strategy-v1.md)。这些模块仍需接入并使用真实对局样本验证。
 
-私有图片的查看和复核参见[本机标注界面](docs/specs/private-annotation-ui-v1.md)；局面试验参见[上场容量识别](docs/specs/capacity-probe-v1.md)和[商店识别](docs/specs/shop-probe-v1.md)，金币消费比较参见[条件分析](docs/specs/economy-lab-v1.md)。真实回放、私人标注和设备配置不会随仓库提供。
+私有图片的查看和复核参见[本机标注界面](docs/specs/private-annotation-ui-v1.md)；局面试验参见[上场容量识别](docs/specs/capacity-probe-v1.md)、[商店识别](docs/specs/shop-probe-v1.md)和[历史回放检查](docs/specs/replay-inspector-v1.md)，金币消费比较参见[条件分析](docs/specs/economy-lab-v1.md)。真实回放、私人标注、该回放检查所需私有配置和设备配置不会随仓库提供。
 
 ## 短提示模拟演示
 
