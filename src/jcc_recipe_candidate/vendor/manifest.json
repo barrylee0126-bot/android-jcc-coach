@@ -1,0 +1,21 @@
+{
+  "project": "ndh0408/tft-advisor",
+  "commit": "8380b6dbeffe9edade7b198d8063bc3e18917b6d",
+  "upstream_file": "src/engine/recipes.mjs",
+  "upstream_url": "https://github.com/ndh0408/tft-advisor/blob/8380b6dbeffe9edade7b198d8063bc3e18917b6d/src/engine/recipes.mjs",
+  "upstream_git_blob_sha": "dd80a7acc3c82033798a61899209b4e2ec9b98a5",
+  "upstream_sha256": "361cd569b129a66356fe66565b5bbb6f40dad6c8eadb57a702a0a118c0ab5c9d",
+  "adopted_lines_inclusive": [31, 44],
+  "adopted_file": "craftableFrom.mjs",
+  "adopted_sha256": "ba5620cb0e1ca229fb0dbc5aa173ef9ba9a4e0cbfe5b795a37b10d5dff7c6c59",
+  "adopted_bytes": 566,
+  "adoption": "unchanged_contiguous_excerpt_directly_imported_by_node",
+  "translation": false,
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 ndh0408",
+  "license_upstream_url": "https://github.com/ndh0408/tft-advisor/blob/8380b6dbeffe9edade7b198d8063bc3e18917b6d/LICENSE",
+  "license_git_blob_sha": "4a390a36555b5de7c9c95596f4d1f283c8da8396",
+  "license_file": "tft-advisor-LICENSE.txt",
+  "license_sha256": "9ae0d534fa96376ce6a3836354f8f36708132973d4e12bcf5c5f612f4f872114",
+  "license_bytes": 1064
+}
