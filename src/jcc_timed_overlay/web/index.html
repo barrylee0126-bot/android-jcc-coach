@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模拟计时 · 短提示实验</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="heading">
+      <p class="eyebrow">14B / 本机显示实验</p>
+      <h1>提示出现，也要及时消失。</h1>
+      <p class="intro">用虚构事件检查显示、过期与撤回，保留没有结果的样本。</p>
+    </header>
+    <section class="preview" aria-label="模拟计时短提示">
+      <div class="section-line"><span>短提示预览</span><a href="/?compact=1" target="_blank" rel="noopener">打开紧凑页面 ↗</a></div>
+      <article id="hint" class="hint" data-state="unknown">
+        <div class="topline"><span class="badge">模拟计时</span><span id="state-label">等待事件</span><span id="countdown" hidden></span></div>
+        <div id="hint-content" aria-live="polite" aria-atomic="true">
+          <h2 id="message">等待模拟事件</h2>
+          <p id="detail">先选择一次显示测试。</p>
+        </div>
+        <div class="sample-line"><span id="source-label">合成来源</span><span id="sample-id">—</span></div>
+        <progress id="lifetime" max="4000" value="0" aria-label="模拟计时剩余有效期" hidden></progress>
+        <p class="disclaimer">虚构测试提示 · 不代表游戏建议</p>
+      </article>
+    </section>
+    <section id="controls" class="controls" aria-label="模拟计时控制">
+      <div class="section-line"><h2>播放一次</h2><button type="button" data-scenario="play" class="primary">完整试播 ▶</button></div>
+      <p id="mode-note" class="note">一轮包含显示、过期、无结果、超时、撤回与源静默。</p>
+      <div class="buttons">
+        <button type="button" data-scenario="show">显示 4 秒</button>
+        <button type="button" data-scenario="expiring">快速过期</button>
+        <button type="button" data-scenario="no_result">没有结果</button>
+        <button type="button" data-scenario="pending_timeout">等待超时</button>
+        <button type="button" data-scenario="invalidated">立即撤回</button>
+        <button type="button" data-scenario="disconnected">明确断开</button>
+        <button type="button" data-scenario="silence">停止源心跳</button>
+        <button type="button" data-scenario="bad_clock">时间不可靠</button>
+      </div>
+    </section>
+    <section class="results" aria-label="本次模拟计时记录">
+      <div class="section-line"><h2>本次记录</h2><a href="/api/report" target="_blank" rel="noopener">匿名报告 ↗</a></div>
+      <div class="metrics">
+        <div><strong id="opportunities">0</strong><span>样本总数</span></div>
+        <div><strong id="successes">0</strong><span>绘制机会回报</span></div>
+        <div><strong id="timeouts">0</strong><span>超时</span></div>
+        <div><strong id="no-results">0</strong><span>无结果</span></div>
+      </div>
+      <p id="latency" class="timing">收帧 → 回报收达：等待样本</p>
+      <p class="note">回报在可见页面的两次绘制回调后发送，包含返回服务端的耗时；不能证明屏幕像素已显示或用户已看见。少量样本的 P95 只描述本轮。</p>
+      <div class="table-wrap"><table><thead><tr><th>样本</th><th>结果</th><th>收帧 → 回报</th></tr></thead><tbody id="samples"><tr><td colspan="3">尚无样本</td></tr></tbody></table></div>
+      <p id="report-note" class="note" role="status">日志由本机服务保存。</p>
+    </section>
+    <footer>本机模拟计时 · 未接入策略 · 不测量设备物理画面到用户可见的总延迟</footer>
+  </main>
+</body>
+</html>
