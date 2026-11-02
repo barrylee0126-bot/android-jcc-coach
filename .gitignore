@@ -1,0 +1,22 @@
+# Default deny: publish only the explicitly listed source and documentation.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/THIRD_PARTY_NOTICES.md
+!/requirements.txt
+!/设备配置.env.example
+!/src/
+!/tools/
+!/docs/
+
+/src/**/__pycache__/
+/src/**/*.pyc
+/tools/*
+!/tools/adb
+!/tools/scrcpy
+!/tools/jcc-observe
+!/tools/setup-macos
+
+# Local configuration, third-party checkouts, models, captures and environments
+# stay outside version control, including if future files are added at root.

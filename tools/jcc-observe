@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+export PYTHONPATH="$project_dir/src:$project_dir/third_party/Sunflower:$project_dir/third_party/jcc-replay-analyst${PYTHONPATH:+:$PYTHONPATH}"
+exec "$project_dir/.venv/bin/python" -m jcc_device.observe "$@"

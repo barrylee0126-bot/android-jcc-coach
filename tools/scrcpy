@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [ -f "$project_dir/设备配置.env" ]; then
+    . "$project_dir/设备配置.env"
+fi
+: "${ANDROID_SERIAL:?请在设备配置.env 中设置 ANDROID_SERIAL}"
+export ANDROID_SERIAL
+
+scrcpy_dir="$project_dir/third_party/scrcpy-macos-aarch64-v5.0.1"
+export ADB="$project_dir/tools/adb"
+export SCRCPY_SERVER_PATH="$scrcpy_dir/scrcpy-server"
+
+exec "$scrcpy_dir/scrcpy" --no-audio --no-clipboard-autosync "$@"

@@ -1,0 +1,63 @@
+#!/bin/sh
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+cd "$project_dir"
+
+if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
+    printf '%s\n' '目前的安装脚本仅支持 Apple Silicon macOS。' >&2
+    exit 1
+fi
+for program in python3.11 git curl tar shasum swiftc ffmpeg; do
+    if ! command -v "$program" >/dev/null 2>&1; then
+        printf '缺少依赖：%s。请先安装，详见 README。\n' "$program" >&2
+        exit 1
+    fi
+done
+
+mkdir -p third_party
+scrcpy_dir=third_party/scrcpy-macos-aarch64-v5.0.1
+if [ ! -x "$scrcpy_dir/scrcpy" ]; then
+    if [ -e "$scrcpy_dir" ]; then
+        printf '%s\n' 'scrcpy 目录不完整，请先检查该目录。' >&2
+        exit 1
+    fi
+    download_dir=$(mktemp -d "${TMPDIR:-/tmp}/jcc-setup.XXXXXX")
+    archive="$download_dir/scrcpy-macos-aarch64-v5.0.1.tar.gz"
+    cleanup_download() {
+        rm -f "$archive"
+        rmdir "$download_dir" 2>/dev/null || true
+    }
+    trap cleanup_download EXIT HUP INT TERM
+    curl -fL --retry 2 'https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-macos-aarch64-v5.0.1.tar.gz' -o "$archive"
+    printf '%s  %s\n' '33611e51977a8289e2e124b220f727895181ef2eb9060e0987a4dc2db9cf0d6b' "$archive" | shasum -a 256 -c -
+    tar -xzf "$archive" -C third_party
+    cleanup_download
+    trap - EXIT HUP INT TERM
+fi
+
+checkout_dependency() {
+    target=$1
+    url=$2
+    revision=$3
+    if [ ! -e "$target" ]; then
+        git clone "$url" "$target"
+        git -C "$target" checkout --detach "$revision"
+    fi
+    if [ ! -d "$target/.git" ] || [ "$(git -C "$target" rev-parse HEAD)" != "$revision" ]; then
+        printf '依赖目录版本不符，请检查：%s\n' "$target" >&2
+        exit 1
+    fi
+}
+checkout_dependency third_party/Sunflower https://github.com/Carey8175/Sunflower.git c4d6b3bc7dce2108dc79c01e57e71c740ae9fa71
+checkout_dependency third_party/jcc-replay-analyst https://github.com/HuanNan520/jcc-replay-analyst.git 0ab03d5053ae949aa8ee25b22ab156a6c8c2c432
+
+if [ ! -x .venv/bin/python ]; then
+    python3.11 -m venv .venv
+fi
+if command -v uv >/dev/null 2>&1; then
+    uv pip install --python .venv/bin/python -r requirements.txt
+else
+    .venv/bin/python -m pip install -r requirements.txt
+fi
+swiftc -O src/jcc_device/vision_ocr.swift -o tools/vision_ocr
+printf '%s\n' '安装完成。配置设备后可运行 tools/jcc-observe 做只读观察。'

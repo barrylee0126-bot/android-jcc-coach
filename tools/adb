@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [ -f "$project_dir/设备配置.env" ]; then
+    . "$project_dir/设备配置.env"
+fi
+: "${ANDROID_SERIAL:?请在设备配置.env 中设置 ANDROID_SERIAL}"
+export ANDROID_SERIAL
+if [ -x "$project_dir/tools/platform-tools/adb" ]; then
+    adb_binary="$project_dir/tools/platform-tools/adb"
+elif [ -x "$project_dir/third_party/scrcpy-macos-aarch64-v5.0.1/adb" ]; then
+    adb_binary="$project_dir/third_party/scrcpy-macos-aarch64-v5.0.1/adb"
+elif command -v adb >/dev/null 2>&1; then
+    adb_binary=$(command -v adb)
+else
+    printf '%s\n' '未找到 adb，请先运行 tools/setup-macos。' >&2
+    exit 1
+fi
+exec "$adb_binary" "$@"
