@@ -73,6 +73,21 @@ anonymous_result = result.summary()
 
 该入口的摘要不含图像、私人路径、ROI 坐标或 OCR 框。真实开发画面与输出仍只保留在项目外私有目录，公开代码、规格和合成测试不记载真实帧号、时间或摘要。验证入口同下文测试命令；合成测试覆盖双倍率一致、跨区框、畸形数值、重复倍率和“同槽不同区域”拒绝。
 
+### 原始文字安全证据（独立 v1 包装）
+
+已发布的 `shop-display-text-probe-v1` 摘要、槽位及 `variants` 字段合同保持不变。需要向独立身份匹配器说明原始 OCR 文本是否可安全规范化时，调用结果对象的 `sanitization_evidence_v1()`，或用导出的 `display_text_binding_sha256(summary)` 和 `display_text_slot_binding_sha256(summary, slot)` 复算绑定。它产生单独的 `shop-display-text-sanitization-evidence/v1`，而不是向旧摘要隐式添加字段。
+
+包装包含完整 supplied display summary 的 `display_summary_binding_sha256`、每个实际槽位的 `display_slot_binding_sha256`、同一 `frame_ref/source_sha256/layout_id`，及 1×、2×各自的：
+
+- `raw_text_safety`: `safe`、`unsafe_control_or_format` 或 `unknown`；
+- `contains_control_or_format`: `false`、`true` 或 `null`。
+
+这些哈希只把包装声明关联到一份完整显示摘要和一个声明槽位；它们不覆盖或认证包装内 `variants` 的安全状态本身，不能检测安全状态被改写，也不能阻止同一显示摘要下的状态被误置到另一槽位。它们同样不认证帧来源、时间、画面或玩家。身份接入方不得把哈希当作安全状态认证，而须直接检查两倍率状态、显示摘要合同和实际接收路径。包装不含原始 OCR 文本、文字框、ROI、图片、路径或私有时间信息。缺框、跨界、低分、异常响应或无法选择唯一框时安全状态必须是 `unknown`，不能假定为 `safe`。
+
+在名称区内选到唯一原文后，先拒绝 Unicode `Cc`、`Cf` 或 `Cs` 字符；tab、LF、CR 和零宽格式字符均使该倍率未知，理由为 `raw_text_control_or_format_character`。仅在此检查通过后才沿用原有 NFKC 加空白删除规范化，所以普通空格仍按既有规则处理。两个倍率安全并不独立，也不能单独让身份匹配放行：接入方必须同时验证显示摘要自身合同、完整摘要／槽位绑定、两倍率均为 `safe`，以及其余身份、目录和版本门控。
+
+当唯一框分数低于门槛时，安全状态为 `unknown/null`，即使原文为空或只含普通空格；低分优先于空文本规范化失败。若同一低分原文含 `Cc`、`Cf` 或 `Cs`，控制／格式字符拒绝优先，安全状态仍为 `unsafe_control_or_format/true`。
+
 ## 私有命令行
 
 ```text

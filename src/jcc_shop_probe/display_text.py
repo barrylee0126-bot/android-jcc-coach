@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -20,6 +22,7 @@ from .probe import OCR, Rect, ShopLayout, _boxes, _normalize
 
 CANDIDATE = "candidate"
 UNKNOWN = "unknown"
+SANITIZATION_EVIDENCE_FORMAT = "shop-display-text-sanitization-evidence/v1"
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,8 @@ class _DisplayTextView:
     normalized_text: str | None
     reason_codes: tuple[str, ...]
     raw_ocr_score: float | int | None
+    raw_text_safety: str = "unknown"
+    contains_control_or_format: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,7 @@ class ShopDisplayTextProbeResult:
     elapsed_ms: float
     ocr_requests: int
     issues: tuple[str, ...] = ()
+    _sanitization: tuple[tuple[_DisplayTextView, ...], ...] = ()
 
     def summary(self) -> dict:
         """Return candidates without image, paths, ROIs, or raw OCR boxes."""
@@ -98,9 +104,89 @@ class ShopDisplayTextProbeResult:
             "actionable": False,
         }
 
+    def sanitization_evidence_v1(self) -> dict:
+        """Return a separately-versioned raw-text safety witness.
+
+        This never returns OCR text, images, boxes, paths, or private timing.
+        Its hashes bind it to the exact v1 summary supplied to a downstream
+        consumer; they are not source authentication.
+        """
+        summary = self.summary()
+        by_slot = {slot.slot: views for slot, views in zip(self.slots, self._sanitization)}
+        slots = []
+        for slot in self.slots:
+            views = by_slot.get(slot.slot, ())
+            scales = {view.identity.scale: view for view in views if view.identity is not None}
+            variants = []
+            for scale in (1, 2):
+                view = scales.get(scale)
+                variants.append({
+                    "scale": scale,
+                    "raw_text_safety": view.raw_text_safety if view is not None else "unknown",
+                    "contains_control_or_format": (view.contains_control_or_format
+                                                   if view is not None else None),
+                })
+            slots.append({"slot": slot.slot,
+                          "display_slot_binding_sha256": display_text_slot_binding_sha256(summary, slot.slot),
+                          "variants": variants})
+        return {
+            "format": SANITIZATION_EVIDENCE_FORMAT,
+            "usage": "offline_development_only",
+            "display_summary_format": summary["format"],
+            "display_summary_binding_sha256": display_text_binding_sha256(summary),
+            "frame_ref": self.frame_ref,
+            "source_sha256": self.frame_ref.removeprefix("sha256:"),
+            "layout_id": self.layout_id,
+            "source_authentication": "not_authenticated",
+            "normalization_policy": "NFKC_then_remove_whitespace_after_rejecting_Cc_Cf_Cs",
+            "slots": slots,
+            "accuracy": None,
+            "human_annotations": 0,
+            "independent_reviews": 0,
+            "actionable": False,
+        }
+
+
+def _canonical_sha256(value: Any) -> str:
+    try:
+        payload = json.dumps(value, ensure_ascii=True, sort_keys=True,
+                             separators=(",", ":"), allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise ValueError("display_summary_not_strict_json") from exc
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def display_text_binding_sha256(summary: Any) -> str:
+    """Hash the exact supplied v1 display summary for cross-object binding.
+
+    The caller must separately validate the v1 display contract.  This helper
+    intentionally establishes only data equality, never capture provenance.
+    """
+    if type(summary) is not dict or summary.get("format") != "shop-display-text-probe-v1":
+        raise ValueError("display_summary_format_invalid")
+    return _canonical_sha256(summary)
+
+
+def display_text_slot_binding_sha256(summary: Any, slot: Any) -> str:
+    """Bind one declared slot to one exact supplied v1 display summary."""
+    if type(slot) is not int or not 1 <= slot <= 5:
+        raise ValueError("display_slot_invalid")
+    binding = display_text_binding_sha256(summary)
+    rows = summary.get("slots")
+    if (type(rows) not in (list, tuple) or sum(type(row) is dict and row.get("slot") == slot
+                                               for row in rows) != 1):
+        raise ValueError("display_slot_not_bound")
+    return _canonical_sha256({"display_summary_binding_sha256": binding,
+                              "slot": slot})
+
 
 def _unknown(slot: int, reason: str) -> ShopDisplayTextSlot:
     return ShopDisplayTextSlot(slot, UNKNOWN, None, (reason,), ())
+
+
+def _control_or_format_free(text: str) -> bool:
+    """Keep normal whitespace normalization, but reject Cc/Cf/Cs before it."""
+    return not any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in text)
 
 
 def _variant(raw: list[dict], *, identity: _ViewIdentity,
@@ -127,12 +213,20 @@ def _variant(raw: list[dict], *, identity: _ViewIdentity,
         return _DisplayTextView(identity, UNKNOWN, None,
                                 ("no_single_text_in_roi",), None)
     box = selected[0]
+    left = crop_left * scale + box["x"]
+    top = crop_top * scale + box["y"]
+    right, bottom = left + box["width"], top + box["height"]
+    if not _control_or_format_free(box["text"]):
+        return _DisplayTextView(identity, UNKNOWN, None,
+                                ("raw_text_control_or_format_character",), box["confidence"],
+                                "unsafe_control_or_format", True)
     text = _normalize(box["text"])
-    if not text:
-        return _DisplayTextView(identity, UNKNOWN, None, ("invalid_display_text",), None)
     if box["confidence"] < min_confidence:
         return _DisplayTextView(identity, UNKNOWN, None, ("low_ocr_confidence",),
                                 box["confidence"])
+    if not text:
+        return _DisplayTextView(identity, UNKNOWN, None, ("invalid_display_text",), None,
+                                "safe", False)
     at_crop_edge = (box["x"] == 0 or box["y"] == 0
                     or box["x"] + box["width"] == (crop_right - crop_left) * scale
                     or box["y"] + box["height"] == (crop_bottom - crop_top) * scale)
@@ -140,11 +234,11 @@ def _variant(raw: list[dict], *, identity: _ViewIdentity,
                     or right == zone_right * scale or bottom == zone_bottom * scale)
     if at_zone_edge:
         return _DisplayTextView(identity, UNKNOWN, None, ("text_touches_roi_edge",),
-                                box["confidence"])
+                                box["confidence"], "safe", False)
     if at_crop_edge:
         return _DisplayTextView(identity, UNKNOWN, None, ("text_touches_crop_edge",),
-                                box["confidence"])
-    return _DisplayTextView(identity, CANDIDATE, text, (), box["confidence"])
+                                box["confidence"], "safe", False)
+    return _DisplayTextView(identity, CANDIDATE, text, (), box["confidence"], "safe", False)
 
 
 def _view_record(view: _DisplayTextView) -> dict:
@@ -195,9 +289,10 @@ def probe_shop_display_text(image_bytes: bytes, *, layout: ShopLayout, ocr: OCR,
     frame_ref = "sha256:" + digest
     calls, size = 0, None
 
-    def finish(slots: list[ShopDisplayTextSlot], issues: tuple[str, ...] = ()):
+    def finish(slots: list[ShopDisplayTextSlot], issues: tuple[str, ...] = (), sanitization=()):
         return ShopDisplayTextProbeResult(frame_ref, size, layout.layout_id, tuple(slots),
-                                           (time.perf_counter_ns() - started) / 1e6, calls, issues)
+                                           (time.perf_counter_ns() - started) / 1e6, calls, issues,
+                                           tuple(sanitization))
 
     if expected_sha256 is not None and digest != expected_sha256:
         return finish([_unknown(slot, "source_hash_mismatch") for slot in range(1, 6)],
@@ -223,6 +318,7 @@ def probe_shop_display_text(image_bytes: bytes, *, layout: ShopLayout, ocr: OCR,
         return finish([_unknown(slot, reason) for slot in range(1, 6)], (reason,))
 
     slots: list[ShopDisplayTextSlot] = []
+    sanitization: list[tuple[_DisplayTextView, ...]] = []
     for slot_layout in layout.slots:
         crop, zone = slot_layout.card, slot_layout.name_zone
         views: list[_DisplayTextView] = []
@@ -249,7 +345,8 @@ def probe_shop_display_text(image_bytes: bytes, *, layout: ShopLayout, ocr: OCR,
                 continue
             views.append(_variant(raw, identity=identity, min_confidence=layout.min_confidence))
         slots.append(_reconcile(views))
-    return finish(slots)
+        sanitization.append(tuple(views))
+    return finish(slots, sanitization=sanitization)
 
 
 def _png(image: Image.Image) -> bytes:
