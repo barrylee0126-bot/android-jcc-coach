@@ -1,0 +1,71 @@
+{
+  "format": "jcc-version-status/v1",
+  "recordedOn": "2026-11-05",
+  "game": "金铲铲之战",
+  "currentAnnouncement": {
+    "version": "18.6",
+    "announcedEffectiveAt": "2026-11-04T12:00:00+08:00",
+    "rollout": "全服不停机更新；公告注明具体时间以实际为准",
+    "sourceClassification": "third_party_reprint_stated_wechat",
+    "sourceUrl": "https://news.17173.com/content/11042026/105243261.shtml",
+    "sourcePublishedAt": "2026-11-04T10:52:43+08:00",
+    "officialPrimarySourceVerified": false
+  },
+  "additionalVersionClues": [
+    {
+      "kind": "third_party_statistics_self_declared",
+      "url": "https://www.dataj.cc/hex",
+      "observedOn": "2026-11-05",
+      "pageLabels": {
+        "season": "S18 自然之力",
+        "version": "18.6",
+        "content": "强化符文统计"
+      },
+      "boundary": "该页仅为第三方强化符文统计线索，不是完整资料包，不认证国服客户端、当前对局、装备配方或策略。"
+    }
+  ],
+  "scope": {
+    "season": "S18",
+    "naturalForce": {
+      "status": "announcement_changes_recorded",
+      "mode": "自然之力",
+      "fullCatalog": "unknown",
+      "fullRecipeCatalog": "unknown"
+    },
+    "leagueLegends": {
+      "status": "new_stage_announced",
+      "stage": "伊泽瑞尔的寻宝之旅",
+      "modeSpecificContent": true
+    },
+    "bigOrangeMode": {
+      "status": "new_mode_announced",
+      "mode": "大橘大利",
+      "modeSpecificContent": true
+    },
+    "region": "unknown",
+    "targetClient": "unknown",
+    "targetMatch": "unknown"
+  },
+  "historicalSnapshot": {
+    "packageKey": "tft-s18-18.5",
+    "status": "historical_third_party_mixed_snapshot_not_current",
+    "reason": "18.6 公告晚于该 18.5 声明包；资料来源、完整性、客户端适用性与 6 条冲突仍未核实",
+    "conflictLedger": "待核查_数据冲突.json",
+    "unresolvedConflictCount": 6
+  },
+  "coverage": {
+    "announcedNewUnitsAndTraits": "recorded_in_18_6_ledger",
+    "announcedNaturalForceBalanceChanges": "recorded_in_18_6_ledger",
+    "fullUnitCatalog": "unknown",
+    "fullTraitCatalog": "unknown",
+    "fullItemCatalog": "unknown",
+    "fullRecipeCatalog": "unknown",
+    "hotfixesAfterAnnouncement": "unknown"
+  },
+  "decisionEligibility": false,
+  "actionAdvice": null,
+  "notes": [
+    "公告中的版本和时间是转载来源所述，不构成默认平板已安装或当前对局已生效的证明。",
+    "不得以本记录替代完整、获许可的本地资料快照，或据此输出买卖、装备合成、羁绊和转型建议。"
+  ]
+}

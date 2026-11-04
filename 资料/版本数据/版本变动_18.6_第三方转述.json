@@ -1,0 +1,176 @@
+{
+  "format": "jcc-version-change-ledger/v1",
+  "version": "18.6",
+  "source": {
+    "classification": "third_party_reprint_stated_wechat",
+    "url": "https://news.17173.com/content/11042026/105243261.shtml",
+    "publishedAt": "2026-11-04T10:52:43+08:00",
+    "announcedEffectiveAt": "2026-11-04T12:00:00+08:00",
+    "officialPrimarySourceVerified": false,
+    "scope": "转载页称全服不停机更新，具体时间以实际为准"
+  },
+  "evidenceBoundary": {
+    "fullCatalog": false,
+    "fullRecipeCatalog": false,
+    "targetClientBinding": "unknown",
+    "targetMatchBinding": "unknown",
+    "decisionEligibility": false
+  },
+  "sections": [
+    {
+      "scope": "英雄联盟传奇·伊泽瑞尔的寻宝之旅",
+      "modeSpecific": true,
+      "kind": "new_stage_and_entities",
+      "entries": [
+        {
+          "name": "伊泽瑞尔",
+          "change": "新增弈子；公告称初始4费，可随游戏进程寻宝升级为5费和7费。"
+        },
+        {
+          "name": "努努和威朗普",
+          "change": "新增弈子；公告描述为多三星棋子阵容的配套单位。"
+        },
+        {
+          "name": "迦娜",
+          "change": "新增弈子；公告称全程无法选中，并定位为祖安阵容后排辅助。"
+        },
+        {
+          "name": "阿木木",
+          "change": "新增弈子；公告称激活羁绊越多越强。"
+        },
+        {
+          "name": "斯莫德",
+          "change": "新增7费弈子。"
+        },
+        {
+          "name": "怪兽",
+          "change": "新增雷克塞与科加斯的双人羁绊；公告称二者具有无限成长。"
+        }
+      ]
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "hero_balance",
+      "entries": [
+        {"name": "可酷伯", "field": "治疗量", "from": "285/335/480", "to": "300/350/550", "unit": "法术加成"},
+        {"name": "雷克塞", "field": "治疗量", "from": "10/14/20", "to": "10/16/24", "unit": "法术加成"},
+        {"name": "暗影狼", "field": "强化伤害", "from": "65/100/160", "to": "60/90/150", "unit": "物理加成"},
+        {"name": "峡谷迅捷蟹", "field": "阿尔法印记治疗量", "from": "15%", "to": "13%"},
+        {"name": "卡兹克", "field": "基础伤害", "from": "250/345/500", "to": "230/310/450", "unit": "法术加成"},
+        {"name": "卡兹克", "field": "孤立无援伤害", "from": "280/390/590", "to": "250/350/530", "unit": "法术加成"},
+        {"name": "绯红印记树怪", "field": "无视护甲（法术加成）", "from": "25%", "to": "10%"},
+        {"name": "绯红印记树怪", "field": "无视护甲基础值", "from": "25%", "to": "30%"},
+        {"name": "绯红印记树怪", "field": "阿尔法印记治疗", "from": "5%", "to": "4%"},
+        {"name": "墨菲特", "field": "护盾", "from": "735/885/2000", "to": "750/925/2000", "unit": "法术加成"},
+        {"name": "墨菲特", "field": "技能伤害", "from": "40/60/2000", "to": "100/150/2000", "unit": "法术加成"},
+        {"name": "奈德丽", "field": "物理形态治疗", "from": "300/450/2000", "to": "325/550/2000", "unit": "法术加成"},
+        {"name": "奈德丽", "field": "物理形态第三次施放至多额外伤害", "from": "125%", "to": "140%"},
+        {"name": "奈德丽", "field": "法术形态强化攻击伤害", "from": "185/275/2000", "to": "195/295/2000", "unit": "法术加成"},
+        {"name": "奈德丽", "field": "法术形态第三次攻击伤害", "from": "330/500/3000", "to": "350/525/3000", "unit": "法术加成"},
+        {"name": "苍蓝雕纹魔像", "field": "护盾生命值比例", "from": "10%", "to": "12%"}
+      ]
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "trait_balance",
+      "entries": [
+        {"name": "灵魂莲华", "field": "物理加成/法术加成", "from": "12/30/50/55%", "to": "12/30/55/65%"},
+        {"name": "永恒之森", "field": "9阶生命值加成", "from": "25%", "to": "10%"},
+        {"name": "约德尔人和朋友", "field": "毛茸茸大朋友远程物理加成/法术加成", "from": "15/28/33%", "to": "15/30/38%"},
+        {"name": "峡谷野怪", "field": "7阶物理强度/法术强度", "from": "5%", "to": "4%"},
+        {"name": "峡谷野怪", "field": "7阶护甲/魔抗", "from": "5%", "to": "4%"}
+      ]
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "system_and_sprite_balance",
+      "entries": [
+        {"name": "月光仪式", "field": "基础费用", "from": "2", "to": "3"},
+        {"name": "珍品摆摊车", "field": "纹章费用", "from": "15", "to": "17"},
+        {"name": "中央大道", "field": "费用", "from": "4", "to": "5"},
+        {"name": "中央大道", "field": "升级费用", "from": "3", "to": "4"}
+      ]
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "item_balance_not_recipe_catalog",
+      "entries": [
+        {"name": "正义之手", "field": "全能吸血", "from": "15%", "to": "12%"},
+        {"name": "光明版正义之手", "field": "全能吸血", "from": "30%", "to": "25%"}
+      ],
+      "note": "公告未提供完整装备目录或合成配方，不能据本节更新任何配方。"
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "augment_balance",
+      "entries": [
+        {"name": "发条增速器", "field": "每次触发攻速", "from": "10%", "to": "12%"},
+        {"name": "巨化术", "field": "皮克斯仙灵物理加成/法术加成", "from": "50%", "to": "35%"},
+        {"name": "应急护盾", "field": "基础抗性", "from": "8", "to": "10"},
+        {"name": "大买特买", "field": "初始金币", "from": "6", "to": "7"},
+        {"name": "世纪和解", "field": "雷恩加尔治疗分享", "from": "25%", "to": "50%"},
+        {"name": "世纪和解", "field": "卡兹克法力分享", "from": "50%", "to": "70%"}
+      ]
+    },
+    {
+      "scope": "英雄联盟传奇·伊泽瑞尔的寻宝之旅",
+      "modeSpecific": true,
+      "kind": "mode_specific_system_changes",
+      "entries": [
+        {"name": "科技钥匙", "change": "公告称所有解锁条件调整，并新增携带者额外效果；未提供完整条件和数值表。"},
+        {"name": "萨科", "change": "公告称原羁绊不再作用于纹章类装备，三星时新增禁用敌方装备8秒的被动。"},
+        {"name": "希维尔与阿利斯塔", "change": "公告称解锁条件和技能机制优化；未提供完整规则表。"},
+        {"name": "纹章之书", "change": "公告称改为提供4个随机纹章选择。"}
+      ]
+    },
+    {
+      "scope": "大橘大利",
+      "modeSpecific": true,
+      "kind": "new_mode_summary",
+      "entries": [
+        {"name": "大橘大利", "change": "新增模式；公告描述其基于英雄联盟传奇、含时间卡片与传送门机制。完整卡池、规则和数值未知。"}
+      ]
+    },
+    {
+      "scope": "英雄联盟传奇·海克斯典籍",
+      "modeSpecific": true,
+      "kind": "stage_entry_closure_and_rank_reset",
+      "entries": [
+        {"name": "旧赛段入口", "change": "公告称标准排位、标准匹配、团队排位和恭喜发财入口于11月4日0点关闭；关闭前已开始的对局可正常结算。"},
+        {"name": "传奇大师及以上", "change": "公告称软重置至传奇钻石IV。"},
+        {"name": "传奇铂金IV至传奇钻石I", "change": "公告称软重置为降低一个大段后的初始段位。"},
+        {"name": "传奇黄铜IV至传奇黄金I", "change": "公告称软重置为当前大段后的初始段位。"},
+        {"name": "传奇黑铁I至传奇黑铁IV", "change": "公告称保留原段位，不参与软重置。"},
+        {"name": "重置后胜点", "change": "公告称重置后的初始胜点统一为0。"}
+      ]
+    },
+    {
+      "scope": "英雄联盟传奇",
+      "modeSpecific": true,
+      "kind": "bug_fixes",
+      "entries": [
+        {"name": "莫德凯撒", "change": "公告称修复三星莫德凯撒偶现无法索敌的问题。"}
+      ]
+    },
+    {
+      "scope": "自然之力",
+      "modeSpecific": true,
+      "kind": "bug_fixes",
+      "entries": [
+        {"name": "暗影狼", "change": "公告称修复带有首领效果的暗影狼在对战受击时首领特效可能消失的问题。"},
+        {"name": "纳尔", "change": "公告称修复纳尔投掷的单位被击倒时可能仍占用格子的问题。"}
+      ]
+    }
+  ],
+  "unresolved": [
+    "默认平板是否已安装18.6、后续热修及当前对局模式均未知。",
+    "公告没有完整英雄、羁绊、装备或合成配方目录；未列出字段须保持unknown。",
+    "现有18.5第三方快照内6条冲突仍未解决，不能以本公告自动覆盖。",
+    "本账本为转载来源的字段断言，不能单独认证来源、当前客户端或策略正确性。"
+  ]
+}
