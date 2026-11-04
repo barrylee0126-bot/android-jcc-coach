@@ -62,6 +62,17 @@ anonymous_result = result.summary()
 
 词典仅作精确匹配，规范化限定为 NFKC 和空白删除；不进行模糊纠错、按子串匹配、同音替换或根据参考费用强行认定。第三方混合来源词典及未知本机补丁不能升级为已核游戏规则。
 
+## 仅显示文本候选（v1）
+
+`probe_shop_display_text(image_bytes, layout, ocr, expected_sha256=None)` 是一个与词典身份识别分开的最小路径。它复用同一 `ShopLayout`、原图字节摘要、五个固定槽位和 OCR 框校验，但只在每张卡片的 `name_zone` 输出未分类的 `display_text_normalized_candidate`。该字段不是棋子身份，也不能推出价格、可购买性或羁绊绑定；结果中的 `identity_status`、`price_status`、`buyability` 和 `trait_binding` 恒为 `unknown`。
+
+- 此入口只接受恰好一份 1× 和一份 2× 视图。每对视图必须绑定完全相同的输入摘要、卡片裁切、槽位号和 `name_zone` 坐标；相同倍率重复、槽位或区域不一致均返回 `unknown / invalid_related_view_contract`。两次倍率只是同帧同后端变体，绝非独立复核。
+- 任何与目标名称区相交但未完整落入的文字框会使该变体 `unknown / text_crosses_roi_boundary`，不会因同区另有完整框而忽略。完整落入但刚好贴名称区内边缘的文字框也会是 `unknown / text_touches_roi_edge`，即使它未贴整张卡片的裁切边。非有限、负宽高、越裁切或畸形 OCR 响应整体按 `invalid_ocr_response` 处理；OCR 后端的普通错误为 `ocr_error`，但不吞掉进程中断或退出。单视图漏读、低分、贴裁切边、空文本、拆分为多个框和文本冲突均不会放宽为候选。
+- 比较仅对 Unicode NFKC 与空白删除后的文本进行；原始 OCR 文本不要求逐字相等，不做词典、模糊或规则纠错。成功仅是 `candidate`，不是正确率或真值。
+- `frame_ref/source_sha256` 是本函数收到的编码字节摘要，用于同一调用内绑定，`source_authentication=not_authenticated`。它不认证调用方的来源、场景、时间、画面新鲜度或原始录像；调用方声明的来源不可升级为证据。
+
+该入口的摘要不含图像、私人路径、ROI 坐标或 OCR 框。真实开发画面与输出仍只保留在项目外私有目录，公开代码、规格和合成测试不记载真实帧号、时间或摘要。验证入口同下文测试命令；合成测试覆盖双倍率一致、跨区框、畸形数值、重复倍率和“同槽不同区域”拒绝。
+
 ## 私有命令行
 
 ```text

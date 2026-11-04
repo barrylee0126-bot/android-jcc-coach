@@ -228,7 +228,12 @@ def _boxes(raw: Any, size: tuple[int, int]) -> list[dict]:
             raise ValueError("invalid_ocr_response")
         x, y, w, h = values
         c = item.get("confidence")
-        if (not isinstance(c, (float, int)) or isinstance(c, bool) or not math.isfinite(c)
+        try:
+            confidence_is_finite = (isinstance(c, (float, int)) and not isinstance(c, bool)
+                                    and math.isfinite(c))
+        except (OverflowError, TypeError, ValueError):
+            confidence_is_finite = False
+        if (not confidence_is_finite
             or not 0 <= c <= 1 or x < 0 or y < 0 or w <= 0 or h <= 0
             or x + w > size[0] or y + h > size[1]):
             raise ValueError("invalid_ocr_response")
