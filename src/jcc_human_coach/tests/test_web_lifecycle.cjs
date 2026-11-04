@@ -61,12 +61,12 @@ test("refresh replaces old cards and withdrawal has no stale player action", () 
   const generated = generatedPage();
   try {
     const p = page(generated.source);
-    assert.match(visibleText(p.state), /自然庇护所/);
+    assert.match(visibleText(p.state), /虚构例子 · 站位检查/);
     p.next.onclick();
-    assert.match(visibleText(p.state), /先补满人口/);
-    assert.doesNotMatch(visibleText(p.state), /围绕植物/);
+    assert.match(visibleText(p.state), /虚构可用单位/);
+    assert.doesNotMatch(visibleText(p.state), /前后排位置/);
     p.next.onclick();
-    assert.match(visibleText(p.state), /3 永恒之森/);
+    assert.match(visibleText(p.state), /虚构羁绊甲/);
     p.next.onclick();
     assert.match(visibleText(p.state), /巨人杀手/);
     p.next.onclick();

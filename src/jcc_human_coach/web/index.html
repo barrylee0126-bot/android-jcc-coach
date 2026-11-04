@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>金铲铲玩家教练 · 本机动态提示</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+<main>
+  <p class="eyebrow">本机浏览器动态演示 · 仅回环送达 · 平板显示尚未接入/验收</p>
+  <h1>玩家教练短提示</h1>
+  <article id="card" data-state="unknown" aria-live="polite" aria-atomic="true">
+    <p id="state">等待结构化候选</p>
+    <p id="source"></p>
+    <h2 id="title"></h2>
+    <p id="action"></p>
+    <p id="reason"></p>
+    <p id="expiry"></p>
+  </article>
+  <p id="note">只在候选、上下文和策略证据齐全时显示。未知、失效、断连、过期或不可信输入会清除旧动作与理由。</p>
+  <footer>页面只接收匿名结构化字段，使用 textContent 渲染；双 rAF 回报仅表示浏览器绘制机会，不代表平板像素或玩家已看见。</footer>
+</main>
+</html>

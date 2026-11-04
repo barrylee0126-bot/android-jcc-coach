@@ -77,20 +77,20 @@ if (!chrome || !(await executable(python))) {
       "--virtual-time-budget=3500", "--dump-dom", pathToFileURL(checked).href,
     ], {encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]});
     const byName = Object.fromEntries(recordsFrom(dom).map(record => [record.name, record.text]));
-    assert.match(byName.initial, /自然庇护所/);
+    assert.match(byName.initial, /虚构例子 · 站位检查/);
     assert.match(byName.initial, /站位/);
     assert.doesNotMatch(byName.initial, /positioning/);
-    assert.match(byName.replay_population, /先补满人口/);
-    assert.doesNotMatch(byName.replay_population, /围绕植物/);
-    assert.match(byName.synthetic_synergy, /3 永恒之森/);
+    assert.match(byName.replay_population, /虚构可用单位/);
+    assert.doesNotMatch(byName.replay_population, /前后排位置/);
+    assert.match(byName.synthetic_synergy, /虚构羁绊甲/);
     assert.match(byName.synthetic_equipment, /巨人杀手/);
-    assert.match(byName.synthetic_transition, /2 迅捷射手/);
+    assert.match(byName.synthetic_transition, /虚构羁绊乙/);
     assert.match(byName.unknown_withdrawn, /提示已撤回/);
     assert.doesNotMatch(byName.unknown_withdrawn, /阵容转型/);
     assert.match(byName.expired_after_local_countdown, /candidate_expired/);
-    assert.doesNotMatch(byName.expired_after_local_countdown, /2 迅捷射手/);
+    assert.doesNotMatch(byName.expired_after_local_countdown, /虚构羁绊乙/);
     console.log(JSON.stringify({status: "browser_visibility_verified", browser: basename(chrome),
-      transitions: "replay_to_synthetic_to_unknown_withdrawn_and_local_expiry"}));
+      transitions: "synthetic_cards_to_unknown_withdrawn_and_local_expiry"}));
   } finally {
     await rm(root, {recursive: true, force: true});
   }
