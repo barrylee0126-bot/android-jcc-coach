@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 
-from .audit import audit_attempts, read_attempts
+from .audit import audit_attempts, audit_visibility_attempts, read_attempts
 
 
 def _outside_project(path):
@@ -49,11 +49,13 @@ def _write_new_private_report(path, payload):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="全分母时延审计；只读私有JSONL，不访问平板。")
-    parser.add_argument("--attempts", required=True, type=Path, help="私有机会日志JSONL")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--attempts", type=Path, help="私有通用机会日志JSONL")
+    group.add_argument("--visibility-attempts", type=Path, help="私有提示可见性机会日志JSONL")
     parser.add_argument("--report", required=True, type=Path, help="项目外新建的私有汇总JSON")
     args = parser.parse_args(argv)
     try:
-        report = audit_attempts(read_attempts(args.attempts))
+        report = audit_visibility_attempts(read_attempts(args.visibility_attempts)) if args.visibility_attempts else audit_attempts(read_attempts(args.attempts))
         _write_new_private_report(args.report, report)
     except (OSError, ValueError):
         print("时延审计未通过；没有访问平板或输出原始机会内容。", file=sys.stderr)
