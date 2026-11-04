@@ -2,11 +2,30 @@ from copy import deepcopy
 import json
 import unittest
 
-from jcc_team_planner import plan, plan_json
+from jcc_team_planner import plan, plan_json, plan_partial_trait_hint, plan_partial_trait_hint_json
 from jcc_team_planner.fixtures import copied_request
 
 
 class PlannerTests(unittest.TestCase):
+    @staticmethod
+    def partial_request():
+        return {
+            "format_version": "jcc-partial-trait-hint-request/v1",
+            "observation": {"source_kind": "replay", "evidence_status": "agent_visual",
+                            "case_id": "fiction-2-5", "frame_ref": "replay:fiction-2-5", "source_sha256": None,
+                            "pts_seconds": {"status": "known", "value": "467.527078"}, "freshness": "stale", "same_frame": True},
+            "rules_context": {"status": "unknown", "binding": None, "refs": []},
+            "phase": {"status": "unknown", "value": None},
+            "field_capacity": {"status": "known", "current": 4, "maximum": 5},
+            "gold": {"status": "known", "value": 9},
+            "active_traits": [
+                {"trait_id": "trait_forest", "display_name": "虚构森林", "count": 2, "next_threshold": 3},
+                {"trait_id": "trait_guard", "display_name": "虚构护卫", "count": 1, "next_threshold": 2},
+            ],
+            "trait_observation_complete": False,
+            "candidate": {"status": "unknown"},
+        }
+
     @staticmethod
     def recipe_request(binding, inventory_entries, recipes):
         return {
@@ -254,6 +273,125 @@ class PlannerTests(unittest.TestCase):
         result = self.evaluated(request)
         result["lineup_candidates"][0]["lineup_instance_ids"].append("changed")
         self.assertEqual(before, request)
+
+    def test_partial_replay_observation_preserves_gaps_and_withdraws_advice(self):
+        request = self.partial_request()
+        result = plan_partial_trait_hint(request)
+        self.assertEqual("evaluated_partial_observation", result["status"])
+        self.assertEqual("replay", result["observation"]["source_kind"])
+        self.assertEqual("agent_visual", result["observation"]["evidence_status"])
+        self.assertEqual("observation_only", result["hint_state"])
+        self.assertTrue(result["withdraw_previous_action"])
+        self.assertEqual([1, 1], [row["needed_for_next_threshold"] for row in result["observed_trait_gaps"]])
+        self.assertIsNone(result["candidate_projection"])
+        self.assertEqual("unknown", result["trait_effect_comparison"]["status"])
+        self.assertIn("candidate_identity_unknown", result["conditions_to_confirm"])
+        self.assertIn("rules_context_unknown", result["conditions_to_confirm"])
+
+    def test_partial_live_candidate_is_only_a_conditional_manual_comparison(self):
+        request = self.partial_request()
+        request["observation"] = {"source_kind": "live", "evidence_status": "human_verified",
+                                  "case_id": "fiction-live-1", "frame_ref": "live:fiction-frame-1", "source_sha256": None,
+                                  "pts_seconds": {"status": "known", "value": "1.000000001"}, "freshness": "current", "same_frame": True}
+        request["rules_context"] = {"status": "known", "binding": deepcopy(copied_request()["binding"]),
+                                    "refs": ["fiction:ruleset-hash"]}
+        request["phase"] = {"status": "known", "value": "preparation"}
+        request["trait_observation_complete"] = True
+        request["candidate"] = {
+            "status": "known", "candidate_ref": "bench:fiction-forest-unit", "legality": "known_legal",
+            "trait_net_deltas_status": "known", "trait_net_deltas": [{"trait_id": "trait_forest", "net_count_delta": 1}],
+            "net_delta_basis": {"status": "declared_current_board_rules", "refs": ["fiction:board-and-rules"]},
+            "cost": {"status": "known", "value": 1}, "star": {"status": "known", "value": 1},
+            "equipped_item_count": {"status": "known", "value": 0},
+        }
+        result = plan_partial_trait_hint(request)
+        self.assertEqual("conditional_manual_candidate", result["hint_state"])
+        self.assertFalse(result["withdraw_previous_action"])
+        self.assertFalse(result["execution_eligible"])
+        self.assertFalse(result["provenance_authenticated"])
+        forest = next(row for row in result["candidate_projection"]["trait_changes_if_added_to_open_slot"]
+                      if row["trait_id"] == "trait_forest")
+        self.assertEqual((2, 1, 3, 3), (forest["before_count"], forest["caller_declared_net_count_delta"],
+                                         forest["after_count_if_added_to_open_slot"], forest["would_reach_next_threshold"]))
+        self.assertEqual("unknown", result["trait_effect_comparison"]["comparison"])
+        # A duplicate-looking candidate must not be treated as a raw +1.  The
+        # caller supplies the net count after its own same-unit/crest/merge
+        # rules; an explicit zero is a valid, known result.
+        request["candidate"]["candidate_ref"] = "bench:duplicate-forest-unit"
+        request["candidate"]["trait_net_deltas"] = [{"trait_id": "trait_forest", "net_count_delta": 0}]
+        result = plan_partial_trait_hint(request)
+        forest = next(row for row in result["candidate_projection"]["trait_changes_if_added_to_open_slot"]
+                      if row["trait_id"] == "trait_forest")
+        self.assertEqual((0, 2, None), (forest["caller_declared_net_count_delta"],
+                                         forest["after_count_if_added_to_open_slot"], forest["would_reach_next_threshold"]))
+        request["candidate"]["trait_net_deltas"] = []
+        result = plan_partial_trait_hint(request)
+        forest = next(row for row in result["candidate_projection"]["trait_changes_if_added_to_open_slot"]
+                      if row["trait_id"] == "trait_forest")
+        self.assertEqual(0, forest["caller_declared_net_count_delta"])
+        request["candidate"]["trait_net_deltas_status"] = "unknown"
+        request["candidate"]["trait_net_deltas"] = []
+        request["candidate"]["net_delta_basis"] = {"status": "unknown", "refs": []}
+        result = plan_partial_trait_hint(request)
+        self.assertTrue(result["withdraw_previous_action"])
+        self.assertIsNone(result["candidate_projection"])
+        self.assertIn("candidate_trait_net_deltas_unknown", result["conditions_to_confirm"])
+
+    def test_partial_contract_rejects_fake_unknown_and_duplicate_json(self):
+        request = self.partial_request()
+        request["candidate"] = {"status": "unknown", "candidate_ref": "made-up"}
+        result = plan_partial_trait_hint(request)
+        self.assertEqual("unknown", result["status"])
+        self.assertTrue(result["withdraw_previous_action"])
+        self.assertEqual("unknown", plan_partial_trait_hint_json(
+            '{"format_version":1,"format_version":2}') ["status"])
+
+    def test_partial_safe_rejection_visibility_and_game_state_phase_alignment(self):
+        for path, bad_value in ((["observation", "source_kind"], []),
+                                (["observation", "evidence_status"], {}),
+                                (["observation", "freshness"], []),
+                                (["candidate", "status"], {}),
+                                (["candidate", "legality"], []),
+                                (["candidate", "trait_net_deltas_status"], {}),
+                                (["phase", "value"], [])):
+            request = self.partial_request()
+            if path[0] == "candidate":
+                request["candidate"] = {
+                    "status": "known", "candidate_ref": "bench:fiction", "legality": "known_legal",
+                    "trait_net_deltas_status": "known", "trait_net_deltas": [{"trait_id": "trait_forest", "net_count_delta": 1}],
+                    "net_delta_basis": {"status": "declared_current_board_rules", "refs": ["fiction:board-and-rules"]},
+                    "cost": {"status": "known", "value": 1}, "star": {"status": "known", "value": 1},
+                    "equipped_item_count": {"status": "known", "value": 0}}
+            elif path[0] == "phase":
+                request["phase"] = {"status": "known", "value": "preparation"}
+            request[path[0]][path[1]] = bad_value
+            result = plan_partial_trait_hint(request)
+            self.assertEqual("unknown", result["status"], path)
+            self.assertTrue(result["withdraw_previous_action"], path)
+        request = self.partial_request()
+        request["phase"] = {"status": "known", "value": "combat"}
+        result = plan_partial_trait_hint(request)
+        self.assertEqual("evaluated_partial_observation", result["status"])
+        self.assertEqual("combat", result["phase"]["value"])
+        request = self.partial_request()
+        request["observation"]["source_kind"] = "unknown"
+        result = plan_partial_trait_hint(request)
+        self.assertEqual("evaluated_partial_observation", result["status"])
+        self.assertEqual("observation_only", result["hint_state"])
+        self.assertIsNone(result["candidate_projection"])
+
+    def test_partial_withholds_candidate_projection_outside_safe_current_context(self):
+        request = self.partial_request()
+        request["candidate"] = {
+            "status": "known", "candidate_ref": "bench:fiction-forest-unit", "legality": "known_legal",
+            "trait_net_deltas_status": "known", "trait_net_deltas": [{"trait_id": "trait_forest", "net_count_delta": 1}],
+            "net_delta_basis": {"status": "declared_current_board_rules", "refs": ["fiction:board-and-rules"]},
+            "cost": {"status": "known", "value": 1}, "star": {"status": "known", "value": 1},
+            "equipped_item_count": {"status": "known", "value": 0}}
+        result = plan_partial_trait_hint(request)
+        self.assertTrue(result["withdraw_previous_action"])
+        self.assertIsNone(result["candidate_projection"])
+        self.assertEqual("withheld_missing_conditions", result["candidate_projection_state"])
 
 
 if __name__ == "__main__":

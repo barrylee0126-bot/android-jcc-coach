@@ -24,6 +24,18 @@
 
 羁绊按棋子目录中明确的羁绊 ID 计数，输出当前数量、最高激活门槛和下一门槛。它不把羁绊数量等同真实战力，也不根据单位名字推断适用阵容。
 
+### 不完整画面的局部羁绊提示
+
+`plan_partial_trait_hint()` 是和完整 `plan()` 分开的窄接口，专为回放或实时画面只识别到少量字段时使用。它**不会**把机器候选伪装成完整阵容、`verified` 证据或当前规则。来源与可信状态是正交字段：`observation.source_kind` 只能是 `replay`、`live`、`synthetic` 或 `unknown`，`observation.evidence_status` 另行声明 `machine_candidate`、`agent_visual`、`human_verified` 或 `unknown`；这些值都只是调用方声明，模块不认证画面、本人视角或帧真实性。
+
+最小请求还须显式给出 `case_id`、`frame_ref`、来源 SHA-256（未知可为 `null`）、`pts_seconds` 秒字符串（可独立为 `unknown`）、`freshness`、`same_frame`、局部 `phase`、`field_capacity`、`gold`、已看见的 `active_traits` 及 `trait_observation_complete`。模块仅接受并原样保留调用方提供的 PTS 字符串，无法验证它在上游是否已经截断；原始 PTS 精度与帧身份均须由上游核验。`phase` 与现有游戏状态合同一致，支持 `preparation`、`combat`、`carousel`、`selection`、`transition` 和 `other`。这些字段只让上游**声明**同一开发帧、源摘要和 PTS；本模块不验证每个字段确实来自这一帧，更不会拿另一帧 OCR 结果补标签。每个字段可独立为 `unknown`，不能用空列表、零或默认棋子补齐。候选棋子可以整体为 `unknown`；此时结果仍会保留可见的羁绊缺口，例如“2/3 还差 1”，但不会猜测备战身份、候选羁绊或购买。输出固定 `provenance_authenticated: false`，即使调用方声明 `human_verified` 也不表示本模块已认证该声明。
+
+当 2-5 一类回放只看到 `4/5`、两个羁绊各差一人、金币为 9，而备战身份、本人准备阶段和规则版本未知时，输出是 `observation_only`：显示观察与待确认条件，并以 `withdraw_previous_action: true` 要求**消费端**撤回旧动作提示。纯函数本身不访问或清除 UI。只有同帧、当前 `live` 来源、准备阶段、空位、完整羁绊观察、候选合法性、金币/价格以及版本绑定规则都由调用方声明齐全时，才输出 `conditional_manual_candidate`；文案会明确这是调用方声明而非认证事实。非当前、跨帧、规则未知或任一关键条件不足时，候选身份与“预计开档”的 `candidate_projection` 会被置为 `null`，防止 UI 把跨帧假设当成可操作结论。它仍只供玩家手动比较，`execution_eligible` 永远为 `false`。
+
+候选字段不接收“该棋子原生羁绊”。它只接受调用方按**当前声明棋盘 + 候选上已确认空位**、同名计数、纹章和合星规则计算后的 `trait_net_deltas`；`net_delta_basis` 必须另附这种计算的调用方声明依据。模块不会自行认证该依据，也不支持换下棋子、纹章转移、合星或负增量变动。`trait_net_deltas_status: known` 允许空列表或显式 `net_count_delta: 0`，表示已知没有羁绊净增量；`unknown` 时必须为 `[]`，并会撤回候选投影。因此，同名候选不能被模块自动当成“+1 开档”。
+
+局部接口可计算“若把已确认候选加入已确认空位，会跨过哪些**已观察到**的下一羁绊门槛”，同时列出候选星级、已穿装备数、价格和合法性状态。它不处理换下棋子、纹章、合星、隐藏羁绊或装备承接；这些需要完整 `plan()` 输入。`trait_effect_comparison` 在局部接口始终是 `unknown`，除非后续接入同版本、受益对象和量纲都明确的效果规则；即使羁绊档位上升，也不得写成“真实战力更高”。
+
 可选 `transition_targets` 允许调用方声明转型目标的必要棋子与羁绊档位。输出只显示已经持有、当前商店正好可见和仍缺失的棋子；当所有缺失棋子都在当前商店时才计算其总价，否则成本为 `null`，不编造刷新次数或转型可达性。即便该价格为 `0`，它也只表示没有已知缺失棋子；人口、核心保留、目标羁绊是否达到、装备承接和即时战力会分别输出，绝不等价于“零成本完成转型”。
 
 可选 `equipment` 复用已发布的 [jcc_recipe_candidate](recipe-candidate-v1.md) 来计算调用方完整闲置散件库存中**各自**可合成的配方。它要求配方请求和阵容请求的版本绑定完全一致，且由调用方给出每件成品的可携带实例；输出按每个阵容候选列出适配、且未满三件装备的上场实例，不比较装备效果、不会判断最佳携带者。多个配方可能争用同一散件，不能同时合成的情况保持未知。若某个可合成成品缺少携带者规则，则不会把它当作“没有适配者”：`equipment_evaluation` 为 `partial_unknown`，并在 `equipment_unknown_item_ids` 逐件列出；有规则但所有声明携带者已满三件时，才是该已知规则下的空候选。未提供 `equipment` 时 `equipment_candidates` 为 `null`、`equipment_evaluation` 为 `not_requested`，与已评估但没有适配结果的空列表不同。

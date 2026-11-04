@@ -20,6 +20,8 @@ from jcc_recipe_candidate import analyze_request as recipe_candidates
 
 REQUEST_FORMAT = "jcc-team-planner-request/v1"
 RESULT_FORMAT = "jcc-team-planner/v1"
+PARTIAL_HINT_REQUEST_FORMAT = "jcc-partial-trait-hint-request/v1"
+PARTIAL_HINT_RESULT_FORMAT = "jcc-partial-trait-hint/v1"
 _BINDING_KEYS = ("game", "region", "mode", "season", "patch", "rules_revision")
 _ID = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{0,63}")
 _MAX_UNITS = 12
@@ -606,6 +608,338 @@ def plan_json(text: Any) -> dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError, RecursionError):
         return _unknown([_issue("json_invalid", "$", "JSON 无效、含重复键或非有限数；未生成候选。")])
     return plan(request)
+
+
+def _partial_hint_issue(code: str, path: str, message_zh: str) -> dict[str, str]:
+    return _issue(code, path, message_zh)
+
+
+def _partial_hint_unknown(issues: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "format_version": PARTIAL_HINT_RESULT_FORMAT,
+        "status": "unknown",
+        "execution_eligible": False,
+        "automatic_action": None,
+        "provenance_authenticated": False,
+        "withdraw_previous_action": True,
+        "hint_state": "withdrawn_invalid_input",
+        "observation": None,
+        "observed_trait_gaps": None,
+        "candidate_projection": None,
+        "candidate_projection_state": "withheld_invalid_input",
+        "trait_effect_comparison": {"status": "unknown", "comparison": "unknown"},
+        "issues": issues,
+    }
+
+
+def _partial_status_value(value: Any, path: str, minimum: int, maximum: int,
+                          issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    if type(value) is not dict or set(value) != {"status", "value"}:
+        issues.append(_partial_hint_issue("partial_value_invalid", path, "状态值须含 status 和 value。"))
+        return None
+    if value["status"] == "unknown" and value["value"] is None:
+        return {"status": "unknown", "value": None}
+    if value["status"] == "known" and _finite_int(value["value"], minimum, maximum):
+        return {"status": "known", "value": value["value"]}
+    issues.append(_partial_hint_issue("partial_value_invalid", path, "known 值须为范围内整数；unknown 值须为 null。"))
+    return None
+
+
+def _partial_pts_value(value: Any, path: str, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    """Keep caller-provided PTS as text so sub-millisecond identity is not lost."""
+    if type(value) is not dict or set(value) != {"status", "value"}:
+        issues.append(_partial_hint_issue("partial_pts_invalid", path, "PTS 须含 status 和原始秒数字符串 value。"))
+        return None
+    if value["status"] == "unknown" and value["value"] is None:
+        return {"status": "unknown", "value": None}
+    if (value["status"] == "known" and type(value["value"]) is str
+            and re.fullmatch(r"(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?", value["value"])):
+        return {"status": "known", "value": value["value"]}
+    issues.append(_partial_hint_issue("partial_pts_invalid", path, "已知 PTS 须为调用方提供的非负秒数字符串；本模块不认证其是否原始精度或对应同一帧。未知时须为 null。"))
+    return None
+
+
+def _parse_partial_observation(value: Any, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    path = "$.observation"
+    fields = {"source_kind", "evidence_status", "case_id", "frame_ref", "source_sha256", "pts_seconds", "freshness", "same_frame"}
+    if not _exact(value, fields, path, issues):
+        return None
+    if type(value["source_kind"]) is not str or value["source_kind"] not in {"replay", "live", "synthetic", "unknown"}:
+        issues.append(_partial_hint_issue("partial_observation_invalid", path + ".source_kind", "来源须为 replay、live、synthetic 或 unknown。"))
+    if type(value["evidence_status"]) is not str or value["evidence_status"] not in {"machine_candidate", "agent_visual", "human_verified", "unknown"}:
+        issues.append(_partial_hint_issue("partial_observation_invalid", path + ".evidence_status", "证据状态须与来源类型独立声明。"))
+    if not _text(value["case_id"]) or not _text(value["frame_ref"]):
+        issues.append(_partial_hint_issue("partial_observation_invalid", path, "case_id 和帧引用须为非空文本；它们只是调用方声明。"))
+    source_hash = value["source_sha256"]
+    if source_hash is not None and (type(source_hash) is not str or re.fullmatch(r"[0-9a-f]{64}", source_hash) is None):
+        issues.append(_partial_hint_issue("partial_observation_invalid", path + ".source_sha256", "来源哈希须为小写 SHA-256 或 null。"))
+    pts_seconds = _partial_pts_value(value["pts_seconds"], path + ".pts_seconds", issues)
+    if (type(value["freshness"]) is not str or value["freshness"] not in {"current", "stale", "unknown"}
+            or type(value["same_frame"]) is not bool):
+        issues.append(_partial_hint_issue("partial_observation_invalid", path, "新鲜度和同帧标志须明确。"))
+    if issues or pts_seconds is None:
+        return None
+    return {"source_kind": value["source_kind"], "evidence_status": value["evidence_status"],
+            "case_id": value["case_id"], "frame_ref": value["frame_ref"], "source_sha256": source_hash,
+            "pts_seconds": pts_seconds, "freshness": value["freshness"], "same_frame": value["same_frame"]}
+
+
+def _parse_partial_rules_context(value: Any, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    path = "$.rules_context"
+    if not _exact(value, {"status", "binding", "refs"}, path, issues):
+        return None
+    if value["status"] == "unknown" and value["binding"] is None and value["refs"] == []:
+        return {"status": "unknown", "binding": None, "refs": []}
+    if type(value["status"]) is str and value["status"] == "known":
+        binding = _binding(value["binding"], path + ".binding", issues)
+        refs = value["refs"]
+        if type(refs) is not list or not refs or not all(_text(ref) for ref in refs) or len(set(refs)) != len(refs):
+            issues.append(_partial_hint_issue("partial_rules_invalid", path + ".refs", "已知规则上下文须附不重复、非空来源引用。"))
+        if binding is not None and not issues:
+            return {"status": "known", "binding": binding, "refs": list(refs)}
+    else:
+        issues.append(_partial_hint_issue("partial_rules_invalid", path, "未知规则上下文须使用 binding=null、refs=[]。"))
+    return None
+
+
+def _parse_partial_phase(value: Any, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    path = "$.phase"
+    if not _exact(value, {"status", "value"}, path, issues):
+        return None
+    if value["status"] == "unknown" and value["value"] is None:
+        return {"status": "unknown", "value": None}
+    if (type(value["status"]) is str and value["status"] == "known" and type(value["value"]) is str
+            and value["value"] in {"preparation", "combat", "carousel", "selection", "transition", "other"}):
+        return deepcopy(value)
+    issues.append(_partial_hint_issue("partial_phase_invalid", path, "阶段未知时 value 须为 null；已知阶段须为受支持枚举。"))
+    return None
+
+
+def _parse_partial_capacity(value: Any, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    path = "$.field_capacity"
+    if not _exact(value, {"status", "current", "maximum"}, path, issues):
+        return None
+    if value["status"] == "unknown" and value["current"] is None and value["maximum"] is None:
+        return {"status": "unknown", "current": None, "maximum": None}
+    if (value["status"] == "known" and _finite_int(value["current"], 0, _MAX_CAPACITY)
+            and _finite_int(value["maximum"], 1, _MAX_CAPACITY) and value["current"] <= value["maximum"]):
+        return deepcopy(value)
+    issues.append(_partial_hint_issue("partial_capacity_invalid", path, "人口未知时须全为 null；已知人数不得超过上限。"))
+    return None
+
+
+def _parse_partial_traits(value: Any, issues: list[dict[str, str]]) -> list[dict] | None:
+    path = "$.active_traits"
+    if type(value) is not list or len(value) > _MAX_TRAITS:
+        issues.append(_partial_hint_issue("partial_traits_invalid", path, "可见羁绊须为有界列表；空列表仅代表未识别到可用羁绊。"))
+        return None
+    output, ids = [], set()
+    for index, row in enumerate(value):
+        row_path = f"{path}[{index}]"
+        if not _exact(row, {"trait_id", "display_name", "count", "next_threshold"}, row_path, issues):
+            continue
+        if (not _identifier(row["trait_id"]) or row["trait_id"] in ids or not _text(row["display_name"])
+                or not _finite_int(row["count"], 0, _MAX_CAPACITY)
+                or (row["next_threshold"] is not None
+                    and (not _finite_int(row["next_threshold"], 1, _MAX_CAPACITY)
+                         or row["next_threshold"] <= row["count"]))):
+            issues.append(_partial_hint_issue("partial_traits_invalid", row_path, "羁绊 ID、显示名、当前数和下一档须明确且一致。"))
+            continue
+        ids.add(row["trait_id"])
+        output.append(deepcopy(row))
+    return output if not issues else None
+
+
+def _parse_partial_candidate(value: Any, issues: list[dict[str, str]]) -> dict[str, Any] | None:
+    path = "$.candidate"
+    if type(value) is not dict or type(value.get("status")) is not str or value.get("status") not in {"unknown", "known"}:
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path, "候选棋子须明确为 known 或 unknown。"))
+        return None
+    if value["status"] == "unknown":
+        if set(value) != {"status"}:
+            issues.append(_partial_hint_issue("partial_candidate_invalid", path, "未知候选不得填入推测身份、价格或羁绊。"))
+            return None
+        return {"status": "unknown"}
+    fields = {"status", "candidate_ref", "legality", "trait_net_deltas_status", "trait_net_deltas",
+              "net_delta_basis", "cost", "star", "equipped_item_count"}
+    if not _exact(value, fields, path, issues):
+        return None
+    if (not _text(value["candidate_ref"]) or type(value["legality"]) is not str
+            or value["legality"] not in {"known_legal", "known_illegal", "unknown"}
+            or type(value["trait_net_deltas_status"]) is not str
+            or value["trait_net_deltas_status"] not in {"known", "unknown"}):
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path, "候选身份、合法性和羁绊净增量状态须明确。"))
+    cost = _partial_status_value(value["cost"], path + ".cost", 0, 99, issues)
+    star = _partial_status_value(value["star"], path + ".star", 1, 4, issues)
+    equipped = _partial_status_value(value["equipped_item_count"], path + ".equipped_item_count", 0, 3, issues)
+    deltas = value["trait_net_deltas"]
+    if type(deltas) is not list or len(deltas) > 5:
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path + ".trait_net_deltas", "候选羁绊净增量须为有界列表。"))
+        return None
+    normalized, trait_ids = [], set()
+    for index, row in enumerate(deltas):
+        row_path = f"{path}.trait_net_deltas[{index}]"
+        if not _exact(row, {"trait_id", "net_count_delta"}, row_path, issues):
+            continue
+        if (not _identifier(row["trait_id"]) or row["trait_id"] in trait_ids
+                or not _finite_int(row["net_count_delta"], 0, _MAX_CAPACITY)):
+            issues.append(_partial_hint_issue("partial_candidate_invalid", row_path, "候选羁绊净增量须为不重复的明确非负整数。"))
+            continue
+        trait_ids.add(row["trait_id"])
+        normalized.append(deepcopy(row))
+    basis = value["net_delta_basis"]
+    if type(basis) is not dict or set(basis) != {"status", "refs"}:
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path + ".net_delta_basis", "净增量依据须含 status 和 refs。"))
+        basis = None
+    elif basis["status"] == "unknown" and basis["refs"] == []:
+        basis = {"status": "unknown", "refs": []}
+    elif (basis["status"] == "declared_current_board_rules" and type(basis["refs"]) is list and basis["refs"]
+          and all(_text(ref) for ref in basis["refs"]) and len(set(basis["refs"])) == len(basis["refs"])):
+        basis = {"status": "declared_current_board_rules", "refs": list(basis["refs"])}
+    else:
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path + ".net_delta_basis", "已知净增量须声明当前棋盘/同名/纹章/合星规则依据；未知时 refs 须为空。"))
+        basis = None
+    if value["trait_net_deltas_status"] == "unknown" and normalized:
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path + ".trait_net_deltas", "净增量未知时不得混入推测数值。"))
+    if value["trait_net_deltas_status"] == "known" and (basis is None or basis["status"] != "declared_current_board_rules"):
+        issues.append(_partial_hint_issue("partial_candidate_invalid", path + ".net_delta_basis", "已知净增量必须附当前棋盘规则的调用方声明依据。"))
+    if issues or cost is None or star is None or equipped is None:
+        return None
+    return {"status": "known", "candidate_ref": value["candidate_ref"], "legality": value["legality"],
+            "trait_net_deltas_status": value["trait_net_deltas_status"], "trait_net_deltas": normalized,
+            "net_delta_basis": basis,
+            "cost": cost, "star": star, "equipped_item_count": equipped}
+
+
+def plan_partial_trait_hint(request: Any) -> dict[str, Any]:
+    """Return a non-executable, evidence-labelled hint from a partial frame.
+
+    This interface deliberately does not coerce a replay/machine observation
+    into :func:`plan`'s complete, version-bound board model.  It can therefore
+    preserve a useful 4/5, 2/3 observation while withdrawing action advice
+    when identity, phase, freshness, or rules are not established.
+    """
+    issues: list[dict[str, str]] = []
+    required = {"format_version", "observation", "rules_context", "phase", "field_capacity", "gold",
+                "active_traits", "trait_observation_complete", "candidate"}
+    if type(request) is not dict or set(request) != required:
+        return _partial_hint_unknown([_partial_hint_issue("partial_shape_invalid", "$", "局部提示请求字段不完整或含未知字段。")])
+    if request["format_version"] != PARTIAL_HINT_REQUEST_FORMAT:
+        return _partial_hint_unknown([_partial_hint_issue("partial_format_unsupported", "$.format_version", "不支持的局部提示格式。")])
+    observation = _parse_partial_observation(request["observation"], issues)
+    rules_context = _parse_partial_rules_context(request["rules_context"], issues)
+    phase = _parse_partial_phase(request["phase"], issues)
+    capacity = _parse_partial_capacity(request["field_capacity"], issues)
+    gold = _partial_status_value(request["gold"], "$.gold", 0, 999, issues)
+    traits = _parse_partial_traits(request["active_traits"], issues)
+    if type(request["trait_observation_complete"]) is not bool:
+        issues.append(_partial_hint_issue("partial_traits_invalid", "$.trait_observation_complete", "须明确是否已完整识别全部在场羁绊。"))
+    candidate = _parse_partial_candidate(request["candidate"], issues)
+    if issues or observation is None or rules_context is None or phase is None or capacity is None or gold is None or traits is None or candidate is None:
+        return _partial_hint_unknown(issues)
+
+    gaps = [{"trait_id": row["trait_id"], "display_name": row["display_name"], "current_count": row["count"],
+             "next_threshold": row["next_threshold"],
+             "needed_for_next_threshold": None if row["next_threshold"] is None else row["next_threshold"] - row["count"]}
+            for row in traits]
+    projection: dict[str, Any] | None = None
+    if candidate["status"] == "known":
+        net_deltas = {row["trait_id"]: row["net_count_delta"] for row in candidate["trait_net_deltas"]}
+        projected = []
+        if candidate["trait_net_deltas_status"] == "known":
+            for row in gaps:
+                added = net_deltas.get(row["trait_id"], 0)
+                after = row["current_count"] + added
+                opened = row["next_threshold"] if row["next_threshold"] is not None and after >= row["next_threshold"] else None
+                projected.append({"trait_id": row["trait_id"], "display_name": row["display_name"],
+                                  "before_count": row["current_count"], "caller_declared_net_count_delta": added,
+                                  "after_count_if_added_to_open_slot": after, "would_reach_next_threshold": opened})
+        projection = {"candidate_ref": candidate["candidate_ref"], "legality": candidate["legality"],
+                      "cost": candidate["cost"], "star": candidate["star"],
+                      "equipped_item_count": candidate["equipped_item_count"],
+                      "trait_net_deltas_status": candidate["trait_net_deltas_status"],
+                      "net_delta_basis": candidate["net_delta_basis"],
+                      "trait_changes_if_added_to_open_slot": projected if candidate["trait_net_deltas_status"] == "known" else None,
+                      "scope_zh": "只适用于调用方已按当前棋盘及同名/纹章/合星规则计算净增量的空位上场；不自行推断候选原生羁绊，也不支持换下棋子或装备承接。"}
+
+    missing_conditions: list[str] = []
+    if observation["source_kind"] != "live":
+        missing_conditions.append("source_not_live")
+    if observation["freshness"] != "current":
+        missing_conditions.append("frame_not_current")
+    if not observation["same_frame"]:
+        missing_conditions.append("fields_not_bound_to_same_frame")
+    if observation["evidence_status"] != "human_verified":
+        missing_conditions.append("observation_not_human_verified")
+    if rules_context["status"] != "known":
+        missing_conditions.append("rules_context_unknown")
+    if phase["status"] != "known" or phase["value"] != "preparation":
+        missing_conditions.append("preparation_phase_not_established")
+    if capacity["status"] != "known" or capacity["current"] >= capacity["maximum"]:
+        missing_conditions.append("open_field_slot_not_established")
+    if not request["trait_observation_complete"]:
+        missing_conditions.append("active_traits_incomplete")
+    if candidate["status"] != "known":
+        missing_conditions.append("candidate_identity_unknown")
+    else:
+        if candidate["legality"] != "known_legal":
+            missing_conditions.append("candidate_legality_not_established")
+        if candidate["trait_net_deltas_status"] != "known":
+            missing_conditions.append("candidate_trait_net_deltas_unknown")
+        if candidate["cost"]["status"] != "known" or gold["status"] != "known":
+            missing_conditions.append("purchase_cost_or_gold_unknown")
+        elif candidate["cost"]["value"] > gold["value"]:
+            missing_conditions.append("candidate_not_affordable")
+
+    if not missing_conditions:
+        hint_state = "conditional_manual_candidate"
+        withdraw = False
+        conditional_hint = "按调用方同帧、准备阶段、空位、候选身份与规则上下文的声明，可把列出的羁绊变化作为玩家手动比较条件；本模块未认证这些声明，且不能据此断言真实战力更强。"
+    elif observation["source_kind"] in {"replay", "synthetic"} or observation["freshness"] != "current":
+        hint_state = "observation_only"
+        withdraw = True
+        conditional_hint = "这是非当前或非实机来源的局面观察；保留可见人数与羁绊缺口，不生成当前动作提示。消费端须据 withdraw_previous_action 实际清除旧提示。"
+    else:
+        hint_state = "withdrawn_missing_conditions"
+        withdraw = True
+        conditional_hint = "关键条件未建立；仅展示可见羁绊缺口，尚不能安全建议上棋子、购买或更换阵容。消费端须据 withdraw_previous_action 实际清除旧提示。"
+    projection_visible = not missing_conditions and projection is not None
+    return {
+        "format_version": PARTIAL_HINT_RESULT_FORMAT,
+        "status": "evaluated_partial_observation",
+        "execution_eligible": False,
+        "automatic_action": None,
+        "provenance_authenticated": False,
+        "withdraw_previous_action": withdraw,
+        "hint_state": hint_state,
+        "observation": observation,
+        "rules_context": rules_context,
+        "phase": phase,
+        "field_capacity": capacity,
+        "gold": gold,
+        "trait_observation_complete": request["trait_observation_complete"],
+        "observed_trait_gaps": gaps,
+        "candidate_projection": projection if projection_visible else None,
+        "candidate_projection_state": "visible" if projection_visible else "withheld_missing_conditions"
+        if candidate["status"] == "known" else "not_available",
+        "trait_effect_comparison": {
+            "status": "unknown", "comparison": "unknown",
+            "reason_zh": "局部提示未接收同版本、受益对象明确且量纲可比的羁绊效果规则；羁绊档位变化不等于真实战力变化。"},
+        "conditions_to_confirm": missing_conditions,
+        "conditional_hint_zh": conditional_hint,
+        "issues": [],
+    }
+
+
+def plan_partial_trait_hint_json(text: Any) -> dict[str, Any]:
+    try:
+        if type(text) is not str:
+            raise ValueError("JSON text required")
+        request = json.loads(text, object_pairs_hook=_no_duplicate_object,
+                             parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+    except (TypeError, ValueError, json.JSONDecodeError, RecursionError):
+        return _partial_hint_unknown([_partial_hint_issue("json_invalid", "$", "JSON 无效、含重复键或非有限数；未生成局部提示。")])
+    return plan_partial_trait_hint(request)
 
 
 def _no_duplicate_object(rows: list[tuple[str, Any]]) -> dict:
