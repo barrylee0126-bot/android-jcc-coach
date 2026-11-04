@@ -57,7 +57,11 @@ class GrayDualRatioLayout:
 
 
 def _valid_iou(value: object) -> bool:
-    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and 0.9 <= value <= 1
+    try:
+        return (not isinstance(value, bool) and isinstance(value, (int, float))
+                and math.isfinite(value) and 0.9 <= value <= 1)
+    except (OverflowError, TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)

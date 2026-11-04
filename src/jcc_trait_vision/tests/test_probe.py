@@ -145,6 +145,26 @@ class TraitVisionTests(unittest.TestCase):
         self.assertEqual(result["status"], "unknown")
         self.assertEqual(result["reason_codes"], ["inverse_box_iou_below_threshold"])
 
+    def test_gray_dual_roi_blur_edge_and_backend_error_remain_unknown(self):
+        result = self.gray_probe([[], item("2/3", score=.3)])
+        self.assertEqual(result["status"], "unknown")
+        self.assertIn("no_single_text_box", result["reason_codes"])
+        result = self.gray_probe([item("2/3", score=.3, x=0), item("2/3", score=.3)])
+        self.assertEqual(result["status"], "unknown")
+        self.assertIn("text_touches_roi_edge", result["reason_codes"])
+
+        class RaisingOCR:
+            def recognize(self, _payload):
+                raise IndexError("synthetic OCR backend failure")
+
+        result = probe_gray_dual_ratio(self.image, source_kind="synthetic", frame=self.frame,
+            candidate=self.gray_input(), ocr=RaisingOCR(), expected_sha256=self.sha)
+        self.assertEqual(result["status"], "unknown")
+        self.assertIn("ocr_failed", result["reason_codes"])
+
     def test_gray_dual_layout_requires_the_fixed_two_pixel_offset(self):
         with self.assertRaises(ValueError):
             GrayDualRatioLayout("bad-gray", (200, 100), (20, 45, 80, 70), (20, 46, 80, 71), "synthetic")
+        with self.assertRaises(ValueError):
+            GrayDualRatioLayout("bad-iou", (200, 100), (20, 45, 80, 70), (20, 47, 80, 72),
+                                "synthetic", minimum_inverse_iou=10**10000)

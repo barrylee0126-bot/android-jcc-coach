@@ -85,8 +85,9 @@ box, meet the raw OCR filter, strictly parse under `parse_trait_ratio`, have
 identical ratios, and have inverse-projected source boxes with IoU at least the
 predeclared threshold (v1 default `0.98`).
 
-The path rejects split boxes, `2./3`, `2/ 3`, OCR failures, visibility or
-animation uncertainty, disagreement, low overlap, and source/evidence mismatch.
+The path rejects split boxes, `2./3`, `2/ 3`, OCR failures or silence (including
+blurred/unreadable text), visibility or animation uncertainty, a box touching
+either ROI edge, disagreement, low overlap, and source/evidence mismatch.
 It returns the two source ROIs, inverse boxes, IoU, preprocessing version and
 failure codes. The views are related transformations of the same image by the
 same backend, so their agreement is explicitly labelled
