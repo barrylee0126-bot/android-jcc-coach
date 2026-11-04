@@ -2,7 +2,7 @@ package com.android.jcc.coachoverlay;
 
 /** Serial, in-memory synthetic demo session. It has no transport or external input. */
 final class SyntheticOverlaySession {
-    private final OverlayState state = new OverlayState();
+    private OverlayState state = new OverlayState();
     private long generation;
     private long delivery;
 
@@ -12,9 +12,21 @@ final class SyntheticOverlaySession {
         return state.accept(envelope(delivery), nowElapsedMs);
     }
 
+    OverlayState.Render accept(String envelope, long nowElapsedMs) {
+        generation++;
+        return state.accept(envelope, nowElapsedMs);
+    }
+
     OverlayState.Render clear() {
         generation++;
         return state.disconnect();
+    }
+
+    /** A new loopback reader owns a new bridge sequence namespace and must not inherit old watermarks. */
+    OverlayState.Render resetForNewObservation() {
+        generation++;
+        state = new OverlayState();
+        return state.clear();
     }
 
     long generation() { return generation; }

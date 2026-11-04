@@ -34,10 +34,11 @@ final class OverlayState {
         revision = incoming.revision;
         renderToken = incoming.renderToken;
         semanticKey = incoming.semanticKey();
-        if (incoming.advice == null) return clear();
+        if (incoming.content == null) return clear();
         long duration = Math.min(incoming.remainingMs, incoming.leaseMs);
-        current = new Render(incoming.advice.titleZh, incoming.advice.actionZh, incoming.advice.reasonZh,
-                receivedElapsedMs + duration);
+        long expiresAt = incoming.expiresAtElapsedMs > 0 ? incoming.expiresAtElapsedMs : receivedElapsedMs + duration;
+        if (expiresAt <= receivedElapsedMs) return clear();
+        current = new Render(incoming.content.titleZh, incoming.content.primaryZh, incoming.content.detailZh, expiresAt);
         return current;
     }
 

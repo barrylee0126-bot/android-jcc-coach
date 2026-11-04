@@ -7,6 +7,10 @@
     <string name="permission_button">打开系统悬浮窗授权页</string>
     <string name="show_button">显示合成短提示（800ms）</string>
     <string name="clear_button">撤回提示</string>
+    <string name="loopback_port_hint">本机回环端口（1024–65535）</string>
+    <string name="loopback_port_invalid">端口必须是 1024–65535 的 ASCII 整数；没有启动观察。</string>
+    <string name="loopback_button">启动本机回环观察（开发）</string>
+    <string name="stop_loopback_button">停止观察并撤回</string>
     <string name="permission_granted">悬浮窗权限：已授予（能力回读，不代表窗口已添加）</string>
     <string name="permission_missing">悬浮窗权限：未授予；不会显示提示</string>
     <string name="permission_and_session_status">%1$s\n本原型不保存窗口或会话状态；显示按钮只触发本地合成提示。</string>
